@@ -214,6 +214,7 @@ export const projectsRepository = {
         | "blockedByTaskId"
         | "isClientVisible"
         | "position"
+        | "subtasks"
       >
     >
   ) => {
