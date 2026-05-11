@@ -1,0 +1,44 @@
+# Docker Ignore file for mod-collab
+node_modules/
+dist/
+npm-debug.log
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+coverage/
+.nyc_output/
+tests/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (no needed in image)
+*.md
+INFO.md
+VERIFICATION_REPORT.md
+AGENTS.md
+
+# Drizzle Studio
+drizzle/
+
+# Logs
+logs/
+*.log
+pids
+*.pid
+*.seed
+*.pid.lock

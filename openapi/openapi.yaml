@@ -1,0 +1,1504 @@
+openapi: 3.0.3
+info:
+  title: mod-collab - Módulo de Colaboración y Gestión de Proyectos
+  version: 1.0.0
+  description: |
+    Microservicio de colaboración Kanban para gestión de proyectos de marketing y productos.
+    Soporta flujos diferenciados para Campañas/Servicios y Pedidos de Producto con visibilidad por roles.
+  contact:
+    name: CIMA CRM Team
+servers:
+  - url: http://localhost:3001
+    description: Desarrollo local
+  - url: http://localhost:8080/collab
+    description: A través de API Gateway (KrakenD)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT obtenido del módulo de autenticación
+  
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Error descriptivo"
+    
+    ProjectType:
+      type: string
+      enum:
+        - campaign_service
+        - product_order
+      description: |
+        - campaign_service: Campañas de marketing, diseño, redes sociales
+        - product_order: Pedidos de productos tangibles (ej. camisetas estampadas)
+    
+    ProjectStatus:
+      type: string
+      enum:
+        - todo
+        - in_progress
+        - in_review
+        - completed
+    
+    ProjectMemberRole:
+      type: string
+      enum:
+        - admin
+        - worker
+        - client
+    
+    TaskPriority:
+      type: string
+      enum:
+        - low
+        - medium
+        - high
+        - urgent
+    
+    TaskColumnKey:
+      type: string
+      enum:
+        - pending
+        - doing
+        - internal_review
+        - client_approval
+        - blocked
+        - done
+        - art_approved
+        - in_production
+        - quality_control
+        - shipped
+        - completed
+        - waiting_material
+    
+    ChatChannel:
+      type: string
+      enum:
+        - internal
+        - external
+        - system
+    
+    ChatMessageType:
+      type: string
+      enum:
+        - text
+        - minor_request
+        - formal_request
+        - milestone
+    
+    ChangeRequestType:
+      type: string
+      enum:
+        - minor
+        - formal
+    
+    ChangeRequestStatus:
+      type: string
+      enum:
+        - open
+        - accepted
+        - rejected
+        - escalated
+        - approved
+    
+    FileOrigin:
+      type: string
+      enum:
+        - internal_chat
+        - external_chat
+        - manual_upload
+    
+    FileFolder:
+      type: string
+      enum:
+        - mockups
+        - final_arts
+        - briefs
+        - contracts
+        - shared_deliverables
+    
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        clientName:
+          type: string
+        clientSub:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          $ref: '#/components/schemas/ProjectType'
+        status:
+          $ref: '#/components/schemas/ProjectStatus'
+        progressPercent:
+          type: integer
+          minimum: 0
+          maximum: 100
+        adminResponsibleSub:
+          type: string
+          format: uuid
+        estimatedDueDate:
+          type: string
+          format: date-time
+          nullable: true
+        unreadNotifications:
+          type: integer
+        latestApprovedFileId:
+          type: string
+          format: uuid
+          nullable: true
+        isArchived:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    ProjectMember:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        userSub:
+          type: string
+          format: uuid
+        role:
+          $ref: '#/components/schemas/ProjectMemberRole'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    TaskColumn:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        key:
+          $ref: '#/components/schemas/TaskColumnKey'
+        title:
+          type: string
+        position:
+          type: integer
+        isClientVisible:
+          type: boolean
+        isDefault:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        columnId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        priority:
+          $ref: '#/components/schemas/TaskPriority'
+        assigneeSub:
+          type: string
+          format: uuid
+          nullable: true
+        reporterSub:
+          type: string
+          format: uuid
+        deadline:
+          type: string
+          format: date-time
+          nullable: true
+        checklistProgress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        blockedByTaskId:
+          type: string
+          format: uuid
+          nullable: true
+        isClientVisible:
+          type: boolean
+        position:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/ChatChannel'
+        messageType:
+          $ref: '#/components/schemas/ChatMessageType'
+        authorSub:
+          type: string
+          format: uuid
+          nullable: true
+        body:
+          type: string
+        mentionedSubs:
+          type: array
+          items:
+            type: string
+            format: uuid
+        metadata:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+    
+    ProjectFile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        origin:
+          $ref: '#/components/schemas/FileOrigin'
+        folder:
+          $ref: '#/components/schemas/FileFolder'
+        fileName:
+          type: string
+        storagePath:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+        version:
+          type: integer
+        isActive:
+          type: boolean
+        isClientVisible:
+          type: boolean
+        approvedByClient:
+          type: boolean
+        approvedBySub:
+          type: string
+          format: uuid
+          nullable: true
+        approvedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdBySub:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    
+    ChangeRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        taskId:
+          type: string
+          format: uuid
+          nullable: true
+        type:
+          $ref: '#/components/schemas/ChangeRequestType'
+        status:
+          $ref: '#/components/schemas/ChangeRequestStatus'
+        requestedBySub:
+          type: string
+          format: uuid
+        resolvedBySub:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+        justification:
+          type: string
+          nullable: true
+        channelMessageId:
+          type: string
+          format: uuid
+          nullable: true
+        escalatedByWorkerSub:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          nullable: true
+    
+    Brief:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        updatedBySub:
+          type: string
+          format: uuid
+        updatedAt:
+          type: string
+          format: date-time
+    
+    BriefChangeLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        requestedBySub:
+          type: string
+          format: uuid
+        approvedBySub:
+          type: string
+          format: uuid
+          nullable: true
+        description:
+          type: string
+        sourceChangeRequestId:
+          type: string
+          format: uuid
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check del servicio
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+                  service:
+                    type: string
+                    example: "mod-collab"
+
+  /openapi.yaml:
+    get:
+      summary: Especificación OpenAPI
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: Documento OpenAPI en formato YAML
+          content:
+            application/yaml:
+              schema:
+                type: string
+
+  /docs:
+    get:
+      summary: Documentación interactiva Swagger UI
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: Interfaz Swagger UI
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /collab/projects:
+    get:
+      summary: Listar proyectos del usuario
+      tags:
+        - Projects
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: type
+          in: query
+          schema:
+            $ref: '#/components/schemas/ProjectType'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/ProjectStatus'
+        - name: admin_sub
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: client_name
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lista de proyectos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Project'
+        '401':
+          description: No autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Crear proyecto nuevo
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - client_name
+                - type
+                - brief
+              properties:
+                name:
+                  type: string
+                  maxLength: 140
+                description:
+                  type: string
+                client_name:
+                  type: string
+                  maxLength: 160
+                client_sub:
+                  type: string
+                  format: uuid
+                type:
+                  $ref: '#/components/schemas/ProjectType'
+                estimated_due_date:
+                  type: string
+                  format: date-time
+                brief:
+                  type: string
+      responses:
+        '201':
+          description: Proyecto creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Project'
+        '400':
+          description: Datos inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Sin permisos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /collab/projects/{projectId}:
+    patch:
+      summary: Actualizar proyecto
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                status:
+                  $ref: '#/components/schemas/ProjectStatus'
+                estimated_due_date:
+                  type: string
+                  format: date-time
+                  nullable: true
+                progress_percent:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+      responses:
+        '200':
+          description: Proyecto actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Project'
+        '403':
+          description: Sin permisos
+        '404':
+          description: Proyecto no encontrado
+
+  /collab/projects/{projectId}/workspace:
+    get:
+      summary: Obtener workspace completo del proyecto
+      description: Retorna proyecto, miembros, tablero (columnas + tareas), brief y cambios formales
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Workspace completo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      project:
+                        $ref: '#/components/schemas/Project'
+                      members:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProjectMember'
+                      board:
+                        type: object
+                        properties:
+                          columns:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/TaskColumn'
+                          tasks:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/Task'
+                      brief:
+                        $ref: '#/components/schemas/Brief'
+                      formalChanges:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/BriefChangeLog'
+        '403':
+          description: Sin permisos
+        '404':
+          description: Proyecto no encontrado
+
+  /collab/projects/{projectId}/members:
+    get:
+      summary: Listar miembros del proyecto
+      tags:
+        - Project Members
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de miembros
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectMember'
+
+    put:
+      summary: Agregar o actualizar miembro del proyecto
+      tags:
+        - Project Members
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_sub
+                - role
+              properties:
+                user_sub:
+                  type: string
+                  format: uuid
+                role:
+                  $ref: '#/components/schemas/ProjectMemberRole'
+      responses:
+        '200':
+          description: Miembro actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectMember'
+        '403':
+          description: Sin permisos
+
+  /collab/projects/{projectId}/columns:
+    get:
+      summary: Listar columnas del proyecto
+      tags:
+        - Columns
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de columnas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskColumn'
+
+    post:
+      summary: Crear columna personalizada
+      tags:
+        - Columns
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - key
+                - title
+                - position
+              properties:
+                key:
+                  type: string
+                title:
+                  type: string
+                  maxLength: 80
+                position:
+                  type: integer
+                is_client_visible:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Columna creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TaskColumn'
+        '403':
+          description: Solo admin puede crear columnas
+
+  /collab/columns/{columnId}:
+    patch:
+      summary: Actualizar columna
+      tags:
+        - Columns
+      parameters:
+        - name: columnId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                position:
+                  type: integer
+                is_client_visible:
+                  type: boolean
+      responses:
+        '200':
+          description: Columna actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/TaskColumn'
+        '403':
+          description: Solo admin puede editar columnas
+
+  /collab/projects/{projectId}/tasks:
+    get:
+      summary: Listar tareas del proyecto
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de tareas (filtradas por rol si es cliente)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+
+    post:
+      summary: Crear tarea
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - column_id
+                - title
+                - position
+              properties:
+                column_id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  maxLength: 180
+                description:
+                  type: string
+                priority:
+                  $ref: '#/components/schemas/TaskPriority'
+                assignee_sub:
+                  type: string
+                  format: uuid
+                due_date:
+                  type: string
+                  format: date-time
+                checklist_progress:
+                  type: integer
+                  default: 0
+                blocked_by_task_id:
+                  type: string
+                  format: uuid
+                client_visible:
+                  type: boolean
+                  default: false
+                position:
+                  type: integer
+      responses:
+        '201':
+          description: Tarea creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+
+  /collab/tasks/{taskId}:
+    patch:
+      summary: Actualizar tarea (incluye moverla entre columnas)
+      tags:
+        - Tasks
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                column_id:
+                  type: string
+                  format: uuid
+                  description: Mover tarea a otra columna
+                title:
+                  type: string
+                description:
+                  type: string
+                priority:
+                  $ref: '#/components/schemas/TaskPriority'
+                assignee_sub:
+                  type: string
+                  format: uuid
+                due_date:
+                  type: string
+                  format: date-time
+                checklist_progress:
+                  type: integer
+                blocked_by_task_id:
+                  type: string
+                  format: uuid
+                client_visible:
+                  type: boolean
+                position:
+                  type: integer
+      responses:
+        '200':
+          description: Tarea actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+
+  /collab/projects/{projectId}/chat/internal:
+    get:
+      summary: Listar mensajes del chat interno
+      description: Solo accesible para admin y workers
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Mensajes del chat interno
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+        '403':
+          description: Cliente no tiene acceso al chat interno
+
+    post:
+      summary: Enviar mensaje al chat interno
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - body
+              properties:
+                body:
+                  type: string
+                mentions:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Mensaje enviado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChatMessage'
+
+  /collab/projects/{projectId}/chat/external:
+    get:
+      summary: Listar mensajes del chat externo
+      description: Accesible para todos los miembros del proyecto
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Mensajes del chat externo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatMessage'
+
+    post:
+      summary: Enviar mensaje al chat externo
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - body
+              properties:
+                body:
+                  type: string
+                mentions:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Mensaje enviado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChatMessage'
+
+  /collab/projects/{projectId}/change-requests/minor:
+    post:
+      summary: Crear solicitud de ajuste menor
+      description: Solo cliente puede crear, worker/admin pueden aceptar
+      tags:
+        - Change Requests
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - task_id
+                - title
+                - description
+              properties:
+                task_id:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  maxLength: 200
+                description:
+                  type: string
+                  maxLength: 300
+                  description: Máximo 300 caracteres para ajustes menores
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChangeRequest'
+        '400':
+          description: Ya existe ajuste menor abierto para esta tarea
+        '403':
+          description: Solo cliente puede solicitar ajuste menor
+
+  /collab/projects/{projectId}/change-requests/formal:
+    post:
+      summary: Crear solicitud de cambio formal
+      description: Cualquier miembro puede crear, solo admin puede aprobar
+      tags:
+        - Change Requests
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - justification
+              properties:
+                task_id:
+                  type: string
+                  format: uuid
+                  description: Tarea relacionada (opcional)
+                title:
+                  type: string
+                  maxLength: 200
+                description:
+                  type: string
+                justification:
+                  type: string
+      responses:
+        '201':
+          description: Solicitud creada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChangeRequest'
+
+  /collab/projects/{projectId}/change-requests/{changeRequestId}:
+    patch:
+      summary: Resolver solicitud de cambio
+      description: Worker/admin para minor, solo admin para formal
+      tags:
+        - Change Requests
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: changeRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - accepted
+                    - rejected
+                    - escalated
+                    - approved
+                  description: |
+                    - accepted: Ajuste menor aceptado por worker
+                    - rejected: Solicitud rechazada
+                    - escalated: Worker escala ajuste menor a formal
+                    - approved: Admin aprueba cambio formal
+      responses:
+        '200':
+          description: Solicitud resuelta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ChangeRequest'
+        '403':
+          description: Sin permisos para resolver
+
+  /collab/projects/{projectId}/change-log/formal:
+    get:
+      summary: Listar registro de cambios formales aprobados
+      tags:
+        - Change Requests
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Registro de cambios
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BriefChangeLog'
+
+  /collab/projects/{projectId}/files:
+    get:
+      summary: Listar archivos del proyecto
+      description: Cliente solo ve archivos marcados como visibles
+      tags:
+        - Files
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lista de archivos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectFile'
+
+    post:
+      summary: Subir metadata de archivo (subida real en servicio de storage separado)
+      tags:
+        - Files
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - file_name
+                - storage_path
+                - mime_type
+                - size_bytes
+                - folder
+                - origin
+              properties:
+                file_name:
+                  type: string
+                  maxLength: 255
+                storage_path:
+                  type: string
+                  description: Ruta en el storage externo
+                mime_type:
+                  type: string
+                  maxLength: 120
+                size_bytes:
+                  type: integer
+                folder:
+                  $ref: '#/components/schemas/FileFolder'
+                is_client_visible:
+                  type: boolean
+                  default: false
+                origin:
+                  $ref: '#/components/schemas/FileOrigin'
+      responses:
+        '201':
+          description: Metadata de archivo registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectFile'
+
+  /collab/files/{fileId}/approve:
+    patch:
+      summary: Marcar archivo como aprobado por cliente
+      description: Solo admin puede aprobar
+      tags:
+        - Files
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - approve
+              properties:
+                approve:
+                  type: boolean
+                  description: Debe ser true
+      responses:
+        '200':
+          description: Archivo aprobado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectFile'
+        '403':
+          description: Solo admin puede aprobar archivos
+
+  /collab/projects/{projectId}/brief:
+    get:
+      summary: Obtener brief del proyecto
+      tags:
+        - Brief
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Brief del proyecto
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Brief'
+        '404':
+          description: Brief no encontrado
+
+    patch:
+      summary: Actualizar brief del proyecto
+      description: Solo admin puede editar. Genera registro automático en change log
+      tags:
+        - Brief
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - body
+              properties:
+                body:
+                  type: string
+                  description: Contenido completo del brief
+      responses:
+        '200':
+          description: Brief actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Brief'
+        '403':
+          description: Solo admin puede editar brief
+
+tags:
+  - name: System
+    description: Endpoints del sistema
+  - name: Projects
+    description: Gestión de proyectos (tablero padre)
+  - name: Project Members
+    description: Miembros del proyecto
+  - name: Columns
+    description: Columnas del tablero Kanban
+  - name: Tasks
+    description: Tareas del proyecto
+  - name: Chat
+    description: Chat interno y externo
+  - name: Change Requests
+    description: Solicitudes de cambio (minor y formal)
+  - name: Files
+    description: Archivos y entregables
+  - name: Brief
+    description: Brief y resumen del proyecto
