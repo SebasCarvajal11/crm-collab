@@ -1,5 +1,4 @@
-# Stage 1: Build
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
 WORKDIR /app
 
@@ -7,32 +6,14 @@ WORKDIR /app
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci
+# Install only production dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force
 
 # Copy source code
 COPY src ./src
 COPY drizzle.config.ts ./
 COPY openapi ./openapi
-
-# Build TypeScript
-RUN npm run build
-
-# Stage 2: Production
-FROM node:18-alpine
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
-
-# Copy built files from builder
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/openapi ./openapi
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -48,4 +29,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start server
-CMD ["npx", "tsx", "dist/src/server.js"]
+CMD ["npx", "tsx", "src/server.ts"]
