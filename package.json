@@ -20,13 +20,13 @@
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.18",
     "pg": "^8.20.0",
+    "tsx": "^4.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.17",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
-    "tsx": "^4.7.1",
     "typescript": "^5.8.3"
   }
 }
