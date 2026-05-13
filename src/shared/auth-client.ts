@@ -34,7 +34,7 @@ export async function fetchUserProfiles(
   };
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
+  const timeout = setTimeout(() => controller.abort(), 1200);
 
   try {
     const url = `${AUTH_BY_SUBJECTS_URL}?subjects=${encodeURIComponent(userSubs.join(","))}`;

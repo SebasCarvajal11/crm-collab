@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "../../../db/connection";
 import {
   projectBriefChangeLog,
@@ -122,6 +122,43 @@ export const projectsRepository = {
       .where(eq(projects.id, projectId))
       .returning();
     return row ?? null;
+  },
+
+  getProjectProgressAggregate: async (projectId: string) => {
+    const rows = await db.execute(sql<{
+      total: number;
+      doneCount: number;
+      reviewCount: number;
+      nonPendingCount: number;
+      progressAvg: number;
+    }>`
+      SELECT
+        COUNT(*)::int AS "total",
+        COUNT(*) FILTER (WHERE c.key IN ('done','completed'))::int AS "doneCount",
+        COUNT(*) FILTER (WHERE c.key IN ('client_approval','quality_control'))::int AS "reviewCount",
+        COUNT(*) FILTER (WHERE c.key <> 'pending')::int AS "nonPendingCount",
+        ROUND(AVG(
+          CASE c.key
+            WHEN 'pending' THEN 0
+            WHEN 'doing' THEN 25
+            WHEN 'internal_review' THEN 50
+            WHEN 'client_approval' THEN 75
+            WHEN 'done' THEN 100
+            WHEN 'blocked' THEN 10
+            WHEN 'waiting_material' THEN 10
+            WHEN 'completed' THEN 100
+            WHEN 'in_production' THEN 60
+            WHEN 'quality_control' THEN 80
+            WHEN 'shipped' THEN 100
+            WHEN 'art_approved' THEN 30
+            ELSE 0
+          END
+        ))::int AS "progressAvg"
+      FROM schema_collab.project_tasks t
+      INNER JOIN schema_collab.project_task_columns c ON c.id = t.column_id
+      WHERE t.project_id = ${projectId}
+    `);
+    return rows.rows?.[0] ?? null;
   },
 
   createProjectMember: async (payload: NewProjectMember) => {

@@ -160,7 +160,10 @@ export const projectTasks = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [index("idx_project_tasks_project_id").on(t.projectId)]
+  (t) => [
+    index("idx_project_tasks_project_id").on(t.projectId),
+    index("idx_project_tasks_project_column_position").on(t.projectId, t.columnId, t.position, t.createdAt),
+  ]
 );
 
 export const projectChatMessages = collabSchema.table(
@@ -179,7 +182,10 @@ export const projectChatMessages = collabSchema.table(
     metadata: jsonb("metadata"),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [index("idx_project_chat_messages_project_id").on(t.projectId)]
+  (t) => [
+    index("idx_project_chat_messages_project_id").on(t.projectId),
+    index("idx_project_chat_messages_project_channel_created").on(t.projectId, t.channel, t.createdAt),
+  ]
 );
 
 export const projectChatMessageReads = collabSchema.table(

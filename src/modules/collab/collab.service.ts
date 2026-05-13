@@ -89,14 +89,29 @@ const assertProjectAccess = async (repo: CollabRepository, actor: Actor, project
 const refreshParentProgress = async (repo: CollabRepository, projectId: string) => {
   const project = await repo.findProjectById(projectId);
   if (!project) return;
-  const tasks = await repo.listTasksByProject(projectId);
-  if (!tasks.length) return;
-  const columns = await repo.listTaskColumnsByProject(projectId);
-  const keyByColumn = new Map(columns.map((c) => [c.id, c.key]));
-  const columnKeys = tasks.map((t) => keyByColumn.get(t.columnId) ?? "pending");
+  const agg = await repo.getProjectProgressAggregate(projectId);
+  if (!agg || !agg.total) {
+    await repo.updateProjectById(projectId, { status: "todo", progressPercent: 0 });
+    return;
+  }
+  const total = Number(agg.total ?? 0);
+  const doneCount = Number(agg.doneCount ?? 0);
+  const reviewCount = Number(agg.reviewCount ?? 0);
+  const nonPendingCount = Number(agg.nonPendingCount ?? 0);
+  const progressAvg = Number(agg.progressAvg ?? 0);
+  const isCompleted = doneCount === total;
+  const isReview = reviewCount > 0;
+  const isInProgress = nonPendingCount > 0;
+  const nextStatus: "todo" | "in_progress" | "in_review" | "completed" = isCompleted
+    ? "completed"
+    : isReview
+      ? "in_review"
+      : isInProgress
+        ? "in_progress"
+        : "todo";
   await repo.updateProjectById(projectId, {
-    status: inferParentStatus(columnKeys),
-    progressPercent: inferProgress(project.type, columnKeys),
+    status: nextStatus,
+    progressPercent: progressAvg,
   });
 };
 
