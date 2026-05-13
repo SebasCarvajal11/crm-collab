@@ -5,6 +5,11 @@ const AUTH_BY_SUBJECTS_URL = `${env.MOD_AUTH_URL}/users/by-subjects`;
 export interface UserProfile {
   email: string;
   role: string;
+  firstName: string | null;
+  lastName: string | null;
+  clientKind: "natural" | "juridical" | null;
+  companyName: string | null;
+  profession: string | null;
 }
 
 /**
@@ -36,10 +41,27 @@ export async function fetchUserProfiles(
     const resp = await fetch(url, { headers, signal: controller.signal });
     if (!resp.ok) return profileMap;
     const body = (await resp.json()) as {
-      data: Array<{ subject: string; email: string; role: string }>;
+      data: Array<{
+        subject: string;
+        email: string;
+        role: string;
+        first_name?: string | null;
+        last_name?: string | null;
+        client_kind?: "natural" | "juridical" | null;
+        company_name?: string | null;
+        profession?: string | null;
+      }>;
     };
     for (const u of body.data ?? []) {
-      profileMap.set(u.subject, { email: u.email, role: u.role });
+      profileMap.set(u.subject, {
+        email: u.email,
+        role: u.role,
+        firstName: u.first_name ?? null,
+        lastName: u.last_name ?? null,
+        clientKind: u.client_kind ?? null,
+        companyName: u.company_name ?? null,
+        profession: u.profession ?? null,
+      });
     }
   } catch {
     // Enrichment failed — return empty map, workspace still works without emails

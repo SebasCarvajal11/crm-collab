@@ -141,7 +141,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     },
     meta: RequestMeta
   ) => {
-    if (actor.role === "client") throw new ForbiddenError("El cliente no puede crear proyectos");
+    if (actor.role !== "admin") throw new ForbiddenError("Solo admin puede crear proyectos");
     const project = await repo.createProject({
       name: payload.name,
       description: payload.description,
@@ -209,6 +209,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     meta: RequestMeta
   ) => {
     const { member } = await assertProjectAccess(repo, actor, projectId);
+    if (actor.role !== "admin") throw new ForbiddenError("Solo admin puede editar proyecto");
     if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo administradores editan proyecto");
     const updated = await repo.updateProjectById(projectId, {
       name: patch.name,
@@ -265,6 +266,11 @@ export const createCollabService = (repo: CollabRepository) => ({
       email: m.userEmail ?? assigneeMap.get(m.userSub)?.email ?? profileMap.get(m.userSub)?.email ?? null,
       taskCount: taskSubCount.get(m.userSub) ?? 0,
       role_label: profileMap.get(m.userSub)?.role ?? m.role,
+      first_name: profileMap.get(m.userSub)?.firstName ?? null,
+      last_name: profileMap.get(m.userSub)?.lastName ?? null,
+      client_kind: profileMap.get(m.userSub)?.clientKind ?? null,
+      company_name: profileMap.get(m.userSub)?.companyName ?? null,
+      profession: profileMap.get(m.userSub)?.profession ?? null,
     }));
 
     const isClient = actor.role === "client";
@@ -284,6 +290,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     meta: RequestMeta
   ) => {
     const { member } = await assertProjectAccess(repo, actor, projectId);
+    if (actor.role !== "admin") throw new ForbiddenError("Solo admin gestiona miembros");
     if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin gestiona miembros");
     const row = await repo.upsertProjectMember({ projectId, userSub, role, userEmail: userEmail ?? null });
     await repo.createAuditLog({
@@ -310,6 +317,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     meta: RequestMeta
   ) => {
     const { member } = await assertProjectAccess(repo, actor, projectId);
+    if (actor.role !== "admin") throw new ForbiddenError("Solo admin crea/edita columnas y flujo");
     if (!canManageProject(actor.role, member?.role)) {
       throw new ForbiddenError("Solo administrador crea/edita columnas y flujo");
     }
@@ -346,6 +354,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     const column = await repo.findTaskColumnById(columnId);
     if (!column) throw new NotFoundError("Columna no encontrada");
     const { member } = await assertProjectAccess(repo, actor, column.projectId);
+    if (actor.role !== "admin") throw new ForbiddenError("Solo admin edita columnas");
     if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin edita columnas");
     const row = await repo.updateTaskColumnById(columnId, patch);
     if (!row) throw new NotFoundError("Columna no encontrada");
@@ -541,10 +550,15 @@ export const createCollabService = (repo: CollabRepository) => ({
       readersByMessage.get(read.messageId)!.add(read.userSub);
     }
     const memberSubs = new Set(members.map((m) => m.userSub));
+    const authorSubs = [
+      ...new Set(messages.map((m) => m.authorSub).filter((sub): sub is string => Boolean(sub))),
+    ];
+    const profileMap = await fetchUserProfiles(authorSubs, actor);
 
     return messages.map((msg) => {
       const readers = readersByMessage.get(msg.id) ?? new Set<string>();
       const mentioned = ((msg.mentionedSubs ?? []) as string[]).filter((sub) => memberSubs.has(sub));
+      const authorProfile = msg.authorSub ? profileMap.get(msg.authorSub) : undefined;
       const required = mentioned.length > 0
         ? mentioned.filter((sub) => sub !== msg.authorSub)
         : members.map((m) => m.userSub).filter((sub) => sub !== msg.authorSub);
@@ -552,6 +566,10 @@ export const createCollabService = (repo: CollabRepository) => ({
       const isSeen = required.length === 0 ? true : seenCount === required.length;
       return {
         ...msg,
+        authorFirstName: authorProfile?.firstName ?? null,
+        authorLastName: authorProfile?.lastName ?? null,
+        authorRole: authorProfile?.role ?? null,
+        authorProfession: authorProfile?.profession ?? null,
         readStatus: {
           isSeen,
           requiredCount: required.length,
@@ -923,6 +941,7 @@ export const createCollabService = (repo: CollabRepository) => ({
 
   patchBrief: async (actor: Actor, projectId: string, body: string, meta: RequestMeta) => {
     const { member } = await assertProjectAccess(repo, actor, projectId);
+    if (actor.role !== "admin") throw new ForbiddenError("Solo admin edita brief");
     if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin edita brief");
     const brief = await repo.upsertBrief({ projectId, content: body, updatedBySub: actor.sub });
     await repo.createBriefChangeLog({
