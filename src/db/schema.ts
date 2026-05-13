@@ -112,6 +112,7 @@ export const projectMembers = collabSchema.table(
     userSub: uuid("user_sub").notNull(),
     role: projectMemberRoleEnum("role").notNull(),
     userEmail: varchar("user_email", { length: 255 }),
+    lastSeenAt: timestamp("last_seen_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },

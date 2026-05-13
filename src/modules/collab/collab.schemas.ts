@@ -53,6 +53,7 @@ export const CreateProjectSchema = z.object({
   description: z.string().max(2000).optional().default(""),
   client_name: z.string().min(2).max(160),
   client_sub: z.string().uuid().optional(),
+  worker_subs: z.array(z.string().uuid()).min(1).max(25),
   type: ProjectTypeEnum,
   estimated_due_date: z.coerce.date().optional(),
   brief: z.string().max(20000).optional().default(""),

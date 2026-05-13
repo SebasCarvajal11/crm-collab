@@ -51,6 +51,7 @@ export const createCollabController = (service: CollabService) => ({
         description: body.description,
         clientName: body.client_name,
         clientSub: body.client_sub,
+        workerSubs: body.worker_subs,
         type: body.type,
         estimatedDueDate: body.estimated_due_date,
         brief: body.brief,
@@ -79,6 +80,11 @@ export const createCollabController = (service: CollabService) => ({
 
   getProjectWorkspace: async (c: Context<AppEnv>) => {
     const data = await service.getProjectWorkspace(c.get("user"), requiredParam(c, "projectId"));
+    return c.json({ data }, 200);
+  },
+
+  getProjectBoard: async (c: Context<AppEnv>) => {
+    const data = await service.getProjectBoard(c.get("user"), requiredParam(c, "projectId"));
     return c.json({ data }, 200);
   },
 

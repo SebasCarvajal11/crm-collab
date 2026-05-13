@@ -14,6 +14,8 @@ const canMoveTasks = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
   globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
 const canInternalChat = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
   globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
+const canReceiveMentionInChannel = (channel: "internal" | "external", memberRole: ProjectMemberRole) =>
+  channel === "internal" ? memberRole === "admin" || memberRole === "worker" : true;
 
 const allowedMentionRolesByActor = (actorRole: GlobalRole): ProjectMemberRole[] => {
   if (actorRole === "admin") return ["admin", "worker", "client"];
@@ -115,6 +117,79 @@ const refreshParentProgress = async (repo: CollabRepository, projectId: string) 
   });
 };
 
+const assertWorkerOnlyAssignments = async (
+  repo: CollabRepository,
+  projectId: string,
+  payload: {
+    assignees?: { userSub: string }[];
+    subtasks?: { assigneeSub?: string | null }[];
+  }
+) => {
+  const projectMembers = await repo.listProjectMembers(projectId);
+  const workerSubs = new Set(projectMembers.filter((m) => m.role === "worker").map((m) => m.userSub));
+
+  for (const assignee of payload.assignees ?? []) {
+    if (!workerSubs.has(assignee.userSub)) {
+      throw new BadRequestError("Solo puedes asignar tareas a trabajadores del proyecto");
+    }
+  }
+
+  for (const subtask of payload.subtasks ?? []) {
+    if (!subtask.assigneeSub) continue;
+    if (!workerSubs.has(subtask.assigneeSub)) {
+      throw new BadRequestError("Las subtareas solo pueden asignarse a trabajadores del proyecto");
+    }
+  }
+};
+
+const buildMemberAssignmentMaps = (
+  assignees: Array<{ userSub: string; userEmail: string }>,
+  tasks: Array<{ assigneeSub: string | null }>
+) => {
+  const assigneeEmailBySub = new Map<string, string>();
+  const taskCountBySub = new Map<string, number>();
+
+  for (const assignee of assignees) {
+    if (!assigneeEmailBySub.has(assignee.userSub)) assigneeEmailBySub.set(assignee.userSub, assignee.userEmail);
+    taskCountBySub.set(assignee.userSub, (taskCountBySub.get(assignee.userSub) ?? 0) + 1);
+  }
+
+  for (const task of tasks) {
+    if (!task.assigneeSub) continue;
+    taskCountBySub.set(task.assigneeSub, (taskCountBySub.get(task.assigneeSub) ?? 0) + 1);
+  }
+
+  return { assigneeEmailBySub, taskCountBySub };
+};
+
+const enrichProjectMembersWithProfiles = async (
+  members: Array<{
+    userSub: string;
+    role: "admin" | "worker" | "client";
+    userEmail: string | null;
+    lastSeenAt: Date | null;
+  }>,
+  actor: Actor,
+  assignees: Array<{ userSub: string; userEmail: string }>,
+  tasks: Array<{ assigneeSub: string | null }>
+) => {
+  const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks);
+  const userSubs = [...new Set(members.map((m) => m.userSub).filter(Boolean))];
+  const profileMap = await fetchUserProfiles(userSubs, actor);
+
+  return members.map((member) => ({
+    ...member,
+    email: member.userEmail ?? assigneeEmailBySub.get(member.userSub) ?? profileMap.get(member.userSub)?.email ?? null,
+    taskCount: taskCountBySub.get(member.userSub) ?? 0,
+    role_label: profileMap.get(member.userSub)?.role ?? member.role,
+    first_name: profileMap.get(member.userSub)?.firstName ?? null,
+    last_name: profileMap.get(member.userSub)?.lastName ?? null,
+    client_kind: profileMap.get(member.userSub)?.clientKind ?? null,
+    company_name: profileMap.get(member.userSub)?.companyName ?? null,
+    profession: profileMap.get(member.userSub)?.profession ?? null,
+  }));
+};
+
 export const createCollabService = (repo: CollabRepository) => ({
   listProjects: async (
     actor: Actor,
@@ -127,6 +202,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       clientName?: string;
     }
   ) => {
+    await repo.syncAllProjectsStatusAndProgress();
     const rows = await repo.listProjectsForUser({
       userSub: actor.sub,
       isAdminGlobal: actor.role === "admin",
@@ -150,6 +226,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       description: string;
       clientName: string;
       clientSub?: string;
+      workerSubs: string[];
       type: ProjectType;
       estimatedDueDate?: Date;
       brief: string;
@@ -174,6 +251,10 @@ export const createCollabService = (repo: CollabRepository) => ({
       role: "admin",
       userEmail: actor.email,
     });
+    const uniqueWorkerSubs = [...new Set(payload.workerSubs)].filter((sub) => sub !== actor.sub && sub !== payload.clientSub);
+    for (const workerSub of uniqueWorkerSubs) {
+      await repo.upsertProjectMember({ projectId: project.id, userSub: workerSub, role: "worker", userEmail: null });
+    }
     if (payload.clientSub) {
       await repo.upsertProjectMember({ projectId: project.id, userSub: payload.clientSub, role: "client", userEmail: null });
     }
@@ -247,52 +328,53 @@ export const createCollabService = (repo: CollabRepository) => ({
 
   getProjectWorkspace: async (actor: Actor, projectId: string) => {
     const { project } = await assertProjectAccess(repo, actor, projectId);
-    const members = await repo.listProjectMembers(projectId);
-    const columns = await repo.listTaskColumnsByProject(projectId);
-    const tasks = await repo.listTasksByProject(projectId);
-    const brief = await repo.getBriefByProject(projectId);
-    const formalChanges = await repo.listChangeRequestsByProject(projectId, "formal");
-    const assignees = await repo.listTaskAssigneesByProject(projectId);
+    await repo.touchProjectMemberActivity(projectId, actor.sub);
+    const [members, columns, tasks, brief, formalChanges, assignees] = await Promise.all([
+      repo.listProjectMembers(projectId),
+      repo.listTaskColumnsByProject(projectId),
+      repo.listTasksByProject(projectId),
+      repo.getBriefByProject(projectId),
+      repo.listChangeRequestsByProject(projectId, "formal"),
+      repo.listTaskAssigneesByProject(projectId),
+    ]);
 
-    // Build a map of userSub → { taskCount, email }
-    const assigneeMap = new Map<string, { count: number; email: string }>();
-    for (const a of assignees) {
-      const existing = assigneeMap.get(a.userSub);
-      if (existing) {
-        existing.count += 1;
-      } else {
-        assigneeMap.set(a.userSub, { count: 1, email: a.userEmail });
-      }
-    }
-    // Also count tasks assigned via assigneeSub on the task itself
-    const taskSubCount = new Map<string, number>();
-    for (const t of tasks) {
-      if (t.assigneeSub) {
-        taskSubCount.set(t.assigneeSub, (taskSubCount.get(t.assigneeSub) ?? 0) + 1);
-      }
-    }
-
-    // Enrich members with profiles from mod-auth (email, role_label)
-    const userSubs = [...new Set(members.map((m) => m.userSub).filter(Boolean))];
-    const profileMap = await fetchUserProfiles(userSubs, actor);
-
-    const enrichedMembers = members.map((m) => ({
-      ...m,
-      email: m.userEmail ?? assigneeMap.get(m.userSub)?.email ?? profileMap.get(m.userSub)?.email ?? null,
-      taskCount: taskSubCount.get(m.userSub) ?? 0,
-      role_label: profileMap.get(m.userSub)?.role ?? m.role,
-      first_name: profileMap.get(m.userSub)?.firstName ?? null,
-      last_name: profileMap.get(m.userSub)?.lastName ?? null,
-      client_kind: profileMap.get(m.userSub)?.clientKind ?? null,
-      company_name: profileMap.get(m.userSub)?.companyName ?? null,
-      profession: profileMap.get(m.userSub)?.profession ?? null,
-    }));
+    const enrichedMembers = await enrichProjectMembersWithProfiles(members, actor, assignees, tasks);
 
     const isClient = actor.role === "client";
     const visibleColumns = isClient ? columns.filter((c) => c.isClientVisible) : columns;
     const visibleTasks = isClient ? tasks.filter((t) => t.isClientVisible) : tasks;
 
     return { project, members: enrichedMembers, board: { columns: visibleColumns, tasks: visibleTasks }, brief, formalChanges };
+  },
+
+  getProjectBoard: async (actor: Actor, projectId: string) => {
+    const { project } = await assertProjectAccess(repo, actor, projectId);
+    await repo.touchProjectMemberActivity(projectId, actor.sub);
+    const [members, columns, tasks, assignees] = await Promise.all([
+      repo.listProjectMembers(projectId),
+      repo.listTaskColumnsByProject(projectId),
+      repo.listTasksByProject(projectId),
+      repo.listTaskAssigneesByProject(projectId),
+    ]);
+
+    const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks);
+
+    const lightweightMembers = members.map((member) => ({
+      ...member,
+      email: member.userEmail ?? assigneeEmailBySub.get(member.userSub) ?? null,
+      taskCount: taskCountBySub.get(member.userSub) ?? 0,
+      first_name: null,
+      last_name: null,
+      client_kind: null,
+      company_name: null,
+      profession: null,
+    }));
+
+    const isClient = actor.role === "client";
+    const visibleColumns = isClient ? columns.filter((c) => c.isClientVisible) : columns;
+    const visibleTasks = isClient ? tasks.filter((t) => t.isClientVisible) : tasks;
+
+    return { project, members: lightweightMembers, board: { columns: visibleColumns, tasks: visibleTasks } };
   },
 
 
@@ -322,7 +404,13 @@ export const createCollabService = (repo: CollabRepository) => ({
 
   listProjectMembers: async (actor: Actor, projectId: string) => {
     await assertProjectAccess(repo, actor, projectId);
-    return repo.listProjectMembers(projectId);
+    await repo.touchProjectMemberActivity(projectId, actor.sub);
+    const [members, assignees, tasks] = await Promise.all([
+      repo.listProjectMembers(projectId),
+      repo.listTaskAssigneesByProject(projectId),
+      repo.listTasksByProject(projectId),
+    ]);
+    return enrichProjectMembersWithProfiles(members, actor, assignees, tasks);
   },
 
   createTaskColumn: async (
@@ -406,6 +494,10 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (!canMoveTasks(actor.role, member?.role)) throw new ForbiddenError("No puedes crear tareas");
     const column = await repo.findTaskColumnById(payload.columnId);
     if (!column || column.projectId !== projectId) throw new BadRequestError("La columna no pertenece al proyecto");
+    await assertWorkerOnlyAssignments(repo, projectId, {
+      assignees: payload.assignees,
+      subtasks: payload.subtasks,
+    });
     const primaryAssigneeSub = payload.assignees?.[0]?.userSub ?? null;
 
     let calculatedProgress = payload.checklistProgress;
@@ -472,6 +564,12 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (!task) throw new NotFoundError("Tarea no encontrada");
     const { member } = await assertProjectAccess(repo, actor, task.projectId);
     if (!canMoveTasks(actor.role, member?.role)) throw new ForbiddenError("No puedes editar/mover tareas");
+    if (patch.assignees !== undefined || patch.subtasks !== undefined) {
+      await assertWorkerOnlyAssignments(repo, task.projectId, {
+        assignees: patch.assignees,
+        subtasks: patch.subtasks,
+      });
+    }
     if (patch.columnId) {
       const column = await repo.findTaskColumnById(patch.columnId);
       if (!column || column.projectId !== task.projectId) throw new BadRequestError("Columna destino inválida");
@@ -551,6 +649,7 @@ export const createCollabService = (repo: CollabRepository) => ({
 
   listChatMessages: async (actor: Actor, projectId: string, channel: "internal" | "external") => {
     const { member } = await assertProjectAccess(repo, actor, projectId);
+    await repo.touchProjectMemberActivity(projectId, actor.sub);
     if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
       throw new ForbiddenError("No tienes acceso al chat interno");
     }
@@ -565,15 +664,12 @@ export const createCollabService = (repo: CollabRepository) => ({
       readersByMessage.get(read.messageId)!.add(read.userSub);
     }
     const memberSubs = new Set(members.map((m) => m.userSub));
-    const authorSubs = [
-      ...new Set(messages.map((m) => m.authorSub).filter((sub): sub is string => Boolean(sub))),
-    ];
-    const profileMap = await fetchUserProfiles(authorSubs, actor);
+    const memberBySub = new Map(members.map((m) => [m.userSub, m]));
 
     return messages.map((msg) => {
       const readers = readersByMessage.get(msg.id) ?? new Set<string>();
       const mentioned = ((msg.mentionedSubs ?? []) as string[]).filter((sub) => memberSubs.has(sub));
-      const authorProfile = msg.authorSub ? profileMap.get(msg.authorSub) : undefined;
+      const authorMember = msg.authorSub ? memberBySub.get(msg.authorSub) : undefined;
       const required = mentioned.length > 0
         ? mentioned.filter((sub) => sub !== msg.authorSub)
         : members.map((m) => m.userSub).filter((sub) => sub !== msg.authorSub);
@@ -581,10 +677,10 @@ export const createCollabService = (repo: CollabRepository) => ({
       const isSeen = required.length === 0 ? true : seenCount === required.length;
       return {
         ...msg,
-        authorFirstName: authorProfile?.firstName ?? null,
-        authorLastName: authorProfile?.lastName ?? null,
-        authorRole: authorProfile?.role ?? null,
-        authorProfession: authorProfile?.profession ?? null,
+        authorFirstName: null,
+        authorLastName: null,
+        authorRole: authorMember?.role ?? null,
+        authorProfession: null,
         readStatus: {
           isSeen,
           requiredCount: required.length,
@@ -618,6 +714,9 @@ export const createCollabService = (repo: CollabRepository) => ({
       }
       if (!allowedTargetRoles.has(targetRole)) {
         throw new ForbiddenError("No tienes permiso para mencionar ese rol en este proyecto");
+      }
+      if (!canReceiveMentionInChannel(channel, targetRole)) {
+        throw new ForbiddenError("No puedes mencionar a este usuario en el canal seleccionado");
       }
     }
 
@@ -688,18 +787,21 @@ export const createCollabService = (repo: CollabRepository) => ({
       throw new ForbiddenError("No tienes acceso al chat interno");
     }
 
-    const messages = await repo.listChatMessagesByChannel(projectId, channel);
-    const idsInChannel = new Set(messages.map((m) => m.id));
     const rowsToMark: string[] = [];
 
     if (payload.upToMessageId) {
-      const upToIdx = messages.findIndex((m) => m.id === payload.upToMessageId);
-      if (upToIdx >= 0) {
-        for (let i = 0; i <= upToIdx; i++) rowsToMark.push(messages[i].id);
+      const target = await repo.findChatMessageByIdInChannel(projectId, channel, payload.upToMessageId);
+      if (target) {
+        const ids = await repo.listChatMessageIdsUpTo(projectId, channel, target.createdAt);
+        rowsToMark.push(...ids);
       }
     }
-    for (const id of payload.messageIds) {
-      if (idsInChannel.has(id)) rowsToMark.push(id);
+    if (payload.messageIds.length > 0) {
+      const messages = await repo.listChatMessagesByChannel(projectId, channel);
+      const idsInChannel = new Set(messages.map((m) => m.id));
+      for (const id of payload.messageIds) {
+        if (idsInChannel.has(id)) rowsToMark.push(id);
+      }
     }
 
     const uniqueIds = [...new Set(rowsToMark)];
@@ -712,9 +814,12 @@ export const createCollabService = (repo: CollabRepository) => ({
 
   listUnreadMentionNotifications: async (actor: Actor) => {
     const rows = await repo.listUnreadMentionNotificationsByUser(actor.sub);
-    const authorSubs = [...new Set(rows.map((r) => r.authorSub).filter((v): v is string => Boolean(v)))];
+    const visibleRows = actor.role === "client"
+      ? rows.filter((row) => row.channel !== "internal")
+      : rows;
+    const authorSubs = [...new Set(visibleRows.map((r) => r.authorSub).filter((v): v is string => Boolean(v)))];
     const profileMap = await fetchUserProfiles(authorSubs, actor);
-    return rows.map((row) => {
+    return visibleRows.map((row) => {
       const profile = row.authorSub ? profileMap.get(row.authorSub) : undefined;
       const authorName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim();
       return {
@@ -998,6 +1103,7 @@ export const createCollabService = (repo: CollabRepository) => ({
 
   getBrief: async (actor: Actor, projectId: string) => {
     await assertProjectAccess(repo, actor, projectId);
+    await repo.touchProjectMemberActivity(projectId, actor.sub);
     const brief = await repo.getBriefByProject(projectId);
     if (!brief) throw new NotFoundError("Brief no encontrado");
     return brief;

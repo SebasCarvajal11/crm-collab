@@ -48,6 +48,11 @@ collabRoutes.patch(
   collabController.updateProject
 );
 collabRoutes.get(
+  "/projects/:projectId/board",
+  zValidator("param", ProjectIdParamSchema),
+  collabController.getProjectBoard
+);
+collabRoutes.get(
   "/projects/:projectId/workspace",
   zValidator("param", ProjectIdParamSchema),
   collabController.getProjectWorkspace

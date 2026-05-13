@@ -32,6 +32,76 @@ import type {
 } from "../collab.types";
 
 export const projectsRepository = {
+  syncAllProjectsStatusAndProgress: async () => {
+    await db.execute(sql`
+      WITH task_agg AS (
+        SELECT
+          t.project_id,
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE c.key IN ('done','completed'))::int AS done_count,
+          COUNT(*) FILTER (WHERE c.key IN ('client_approval','quality_control'))::int AS review_count,
+          COUNT(*) FILTER (WHERE c.key <> 'pending')::int AS non_pending_count,
+          ROUND(AVG(
+            CASE c.key
+              WHEN 'pending' THEN 0
+              WHEN 'doing' THEN 25
+              WHEN 'internal_review' THEN 50
+              WHEN 'client_approval' THEN 75
+              WHEN 'done' THEN 100
+              WHEN 'blocked' THEN 10
+              WHEN 'waiting_material' THEN 10
+              WHEN 'completed' THEN 100
+              WHEN 'in_production' THEN 60
+              WHEN 'quality_control' THEN 80
+              WHEN 'shipped' THEN 100
+              WHEN 'art_approved' THEN 30
+              ELSE 0
+            END
+          ))::int AS progress_avg
+        FROM schema_collab.project_tasks t
+        INNER JOIN schema_collab.project_task_columns c ON c.id = t.column_id
+        GROUP BY t.project_id
+      )
+      UPDATE schema_collab.projects p
+      SET
+        status = CASE
+          WHEN a.total = a.done_count THEN 'completed'::schema_collab.parent_project_status
+          WHEN a.review_count > 0 THEN 'in_review'::schema_collab.parent_project_status
+          WHEN a.non_pending_count > 0 THEN 'in_progress'::schema_collab.parent_project_status
+          ELSE 'todo'::schema_collab.parent_project_status
+        END,
+        progress_percent = COALESCE(a.progress_avg, 0),
+        updated_at = NOW()
+      FROM task_agg a
+      WHERE p.id = a.project_id
+        AND p.is_archived = false
+        AND (
+          p.status IS DISTINCT FROM CASE
+            WHEN a.total = a.done_count THEN 'completed'::schema_collab.parent_project_status
+            WHEN a.review_count > 0 THEN 'in_review'::schema_collab.parent_project_status
+            WHEN a.non_pending_count > 0 THEN 'in_progress'::schema_collab.parent_project_status
+            ELSE 'todo'::schema_collab.parent_project_status
+          END
+          OR p.progress_percent IS DISTINCT FROM COALESCE(a.progress_avg, 0)
+        );
+    `);
+
+    await db.execute(sql`
+      UPDATE schema_collab.projects p
+      SET
+        status = 'todo'::schema_collab.parent_project_status,
+        progress_percent = 0,
+        updated_at = NOW()
+      WHERE p.is_archived = false
+        AND NOT EXISTS (
+          SELECT 1
+          FROM schema_collab.project_tasks t
+          WHERE t.project_id = p.id
+        )
+        AND (p.status IS DISTINCT FROM 'todo'::schema_collab.parent_project_status OR p.progress_percent IS DISTINCT FROM 0);
+    `);
+  },
+
   createProject: async (payload: NewProject) => {
     const [project] = await db.insert(projects).values(payload).returning();
     return project;
@@ -194,6 +264,13 @@ export const projectsRepository = {
     return row ?? null;
   },
 
+  touchProjectMemberActivity: async (projectId: string, userSub: string) => {
+    await db
+      .update(projectMembers)
+      .set({ lastSeenAt: new Date(), updatedAt: new Date() })
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userSub, userSub)));
+  },
+
   createTaskColumn: async (payload: NewProjectTaskColumn) => {
     const [row] = await db.insert(projectTaskColumns).values(payload).returning();
     return row;
@@ -272,12 +349,44 @@ export const projectsRepository = {
     return row;
   },
 
-  listChatMessagesByChannel: async (projectId: string, channel: "internal" | "external" | "system") =>
-    db
+  listChatMessagesByChannel: async (projectId: string, channel: "internal" | "external" | "system") => {
+    const rows = await db
       .select()
       .from(projectChatMessages)
       .where(and(eq(projectChatMessages.projectId, projectId), eq(projectChatMessages.channel, channel)))
-      .orderBy(asc(projectChatMessages.createdAt)),
+      .orderBy(desc(projectChatMessages.createdAt))
+      .limit(250);
+    return [...rows].reverse();
+  },
+
+  findChatMessageByIdInChannel: async (projectId: string, channel: "internal" | "external" | "system", messageId: string) => {
+    const [row] = await db
+      .select({ id: projectChatMessages.id, createdAt: projectChatMessages.createdAt })
+      .from(projectChatMessages)
+      .where(
+        and(
+          eq(projectChatMessages.id, messageId),
+          eq(projectChatMessages.projectId, projectId),
+          eq(projectChatMessages.channel, channel)
+        )
+      )
+      .limit(1);
+    return row ?? null;
+  },
+
+  listChatMessageIdsUpTo: async (projectId: string, channel: "internal" | "external" | "system", createdAt: Date) => {
+    const rows = await db
+      .select({ id: projectChatMessages.id })
+      .from(projectChatMessages)
+      .where(
+        and(
+          eq(projectChatMessages.projectId, projectId),
+          eq(projectChatMessages.channel, channel),
+          sql`${projectChatMessages.createdAt} <= ${createdAt}`
+        )
+      );
+    return rows.map((r) => r.id);
+  },
 
   markChatMessagesRead: async (rows: NewProjectChatMessageRead[]) => {
     if (!rows.length) return [];
@@ -338,10 +447,12 @@ export const projectsRepository = {
     const rows = await db
       .select({ id: projectMentionNotifications.id })
       .from(projectMentionNotifications)
+      .innerJoin(projects, eq(projectMentionNotifications.projectId, projects.id))
       .where(
         and(
           eq(projectMentionNotifications.recipientSub, recipientSub),
-          eq(projectMentionNotifications.isSeen, false)
+          eq(projectMentionNotifications.isSeen, false),
+          eq(projects.isArchived, false)
         )
       );
     return rows.length;
