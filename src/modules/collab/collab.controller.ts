@@ -245,6 +245,21 @@ export const createCollabController = (service: CollabService) => ({
     return c.json({ data: row }, 200);
   },
 
+  listUnreadMentionNotifications: async (c: Context<AppEnv>) => {
+    const data = await service.listUnreadMentionNotifications(c.get("user"));
+    return c.json({ data }, 200);
+  },
+
+  countUnreadMentionNotifications: async (c: Context<AppEnv>) => {
+    const count = await service.countUnreadMentionNotifications(c.get("user"));
+    return c.json({ data: { unread_count: count } }, 200);
+  },
+
+  markMentionNotificationSeen: async (c: Context<AppEnv>) => {
+    const data = await service.markMentionNotificationSeen(c.get("user"), requiredParam(c, "notificationId"));
+    return c.json({ data }, 200);
+  },
+
   createMinorChangeRequest: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateMinorChangeRequestBody>(c);
     const row = await service.createMinorChangeRequest(

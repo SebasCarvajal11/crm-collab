@@ -13,6 +13,7 @@ import {
   projectTaskComments,
   projectTasks,
   projectChatMessageReads,
+  projectMentionNotifications,
 } from "../../../db/schema";
 import type {
   NewProject,
@@ -27,6 +28,7 @@ import type {
   NewProjectTask,
   NewProjectTaskColumn,
   NewProjectChatMessageRead,
+  NewProjectMentionNotification,
 } from "../collab.types";
 
 export const projectsRepository = {
@@ -258,6 +260,84 @@ export const projectsRepository = {
       .select()
       .from(projectChatMessageReads)
       .where(inArray(projectChatMessageReads.messageId, messageIds));
+  },
+
+  createMentionNotifications: async (rows: NewProjectMentionNotification[]) => {
+    if (!rows.length) return [];
+    return db
+      .insert(projectMentionNotifications)
+      .values(rows)
+      .onConflictDoNothing()
+      .returning();
+  },
+
+  listUnreadMentionNotificationsByUser: async (recipientSub: string) =>
+    db
+      .select({
+        id: projectMentionNotifications.id,
+        projectId: projectMentionNotifications.projectId,
+        messageId: projectMentionNotifications.messageId,
+        channel: projectMentionNotifications.channel,
+        recipientSub: projectMentionNotifications.recipientSub,
+        authorSub: projectMentionNotifications.authorSub,
+        authorEmail: projectMentionNotifications.authorEmail,
+        messagePreview: projectMentionNotifications.messagePreview,
+        createdAt: projectMentionNotifications.createdAt,
+        projectName: projects.name,
+      })
+      .from(projectMentionNotifications)
+      .innerJoin(projects, eq(projectMentionNotifications.projectId, projects.id))
+      .where(
+        and(
+          eq(projectMentionNotifications.recipientSub, recipientSub),
+          eq(projectMentionNotifications.isSeen, false),
+          eq(projects.isArchived, false)
+        )
+      )
+      .orderBy(desc(projectMentionNotifications.createdAt))
+      .limit(100),
+
+  countUnreadMentionNotificationsByUser: async (recipientSub: string) => {
+    const rows = await db
+      .select({ id: projectMentionNotifications.id })
+      .from(projectMentionNotifications)
+      .where(
+        and(
+          eq(projectMentionNotifications.recipientSub, recipientSub),
+          eq(projectMentionNotifications.isSeen, false)
+        )
+      );
+    return rows.length;
+  },
+
+  markMentionNotificationSeen: async (id: string, recipientSub: string) => {
+    const [row] = await db
+      .update(projectMentionNotifications)
+      .set({ isSeen: true, seenAt: new Date() })
+      .where(
+        and(
+          eq(projectMentionNotifications.id, id),
+          eq(projectMentionNotifications.recipientSub, recipientSub),
+          eq(projectMentionNotifications.isSeen, false)
+        )
+      )
+      .returning();
+    return row ?? null;
+  },
+
+  markMentionNotificationsSeenByMessages: async (recipientSub: string, messageIds: string[]) => {
+    if (!messageIds.length) return [];
+    return db
+      .update(projectMentionNotifications)
+      .set({ isSeen: true, seenAt: new Date() })
+      .where(
+        and(
+          eq(projectMentionNotifications.recipientSub, recipientSub),
+          eq(projectMentionNotifications.isSeen, false),
+          inArray(projectMentionNotifications.messageId, messageIds)
+        )
+      )
+      .returning();
   },
 
   createFile: async (payload: NewProjectFile) => {

@@ -11,6 +11,7 @@ import {
   ColumnIdParamSchema,
   CreateChatMessageSchema,
   MarkChatReadSchema,
+  NotificationIdParamSchema,
   CreateColumnSchema,
   CreateFileSchema,
   CreateFormalChangeRequestSchema,
@@ -129,6 +130,14 @@ collabRoutes.post(
   zValidator("param", ProjectIdParamSchema),
   zValidator("json", MarkChatReadSchema),
   collabController.markExternalChatRead
+);
+
+collabRoutes.get("/notifications/chat-mentions/unread", collabController.listUnreadMentionNotifications);
+collabRoutes.get("/notifications/chat-mentions/unread/count", collabController.countUnreadMentionNotifications);
+collabRoutes.patch(
+  "/notifications/chat-mentions/:notificationId/read",
+  zValidator("param", NotificationIdParamSchema),
+  collabController.markMentionNotificationSeen
 );
 
 collabRoutes.post(

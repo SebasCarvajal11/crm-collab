@@ -197,6 +197,32 @@ export const projectChatMessageReads = collabSchema.table(
   ]
 );
 
+export const projectMentionNotifications = collabSchema.table(
+  "project_mention_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => projectChatMessages.id, { onDelete: "cascade" }),
+    channel: chatChannelEnum("channel").notNull(),
+    recipientSub: uuid("recipient_sub").notNull(),
+    authorSub: uuid("author_sub"),
+    authorEmail: varchar("author_email", { length: 255 }),
+    messagePreview: varchar("message_preview", { length: 240 }).notNull(),
+    isSeen: boolean("is_seen").default(false).notNull(),
+    seenAt: timestamp("seen_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_mention_notification_message_recipient").on(t.messageId, t.recipientSub),
+    index("idx_mention_notification_recipient_seen").on(t.recipientSub, t.isSeen),
+    index("idx_mention_notification_created_at").on(t.createdAt),
+  ]
+);
+
 export const projectFiles = collabSchema.table(
   "project_files",
   {

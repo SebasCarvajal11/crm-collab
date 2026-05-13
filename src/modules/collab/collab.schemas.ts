@@ -39,6 +39,7 @@ export const TaskIdParamSchema = z.object({ taskId: z.string().uuid() });
 export const ColumnIdParamSchema = z.object({ columnId: z.string().uuid() });
 export const FileIdParamSchema = z.object({ fileId: z.string().uuid() });
 export const ChangeRequestIdParamSchema = z.object({ changeRequestId: z.string().uuid() });
+export const NotificationIdParamSchema = z.object({ notificationId: z.string().uuid() });
 
 export const ProjectFiltersQuerySchema = PaginationQuerySchema.extend({
   type: ProjectTypeEnum.optional(),

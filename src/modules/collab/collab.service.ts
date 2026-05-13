@@ -615,6 +615,22 @@ export const createCollabService = (repo: CollabRepository) => ({
       body,
       mentionedSubs: mentionSubs,
     });
+    if (mentionSubs.length > 0) {
+      const preview = body.trim().slice(0, 240);
+      await repo.createMentionNotifications(
+        mentionSubs
+          .filter((sub) => sub !== actor.sub)
+          .map((recipientSub) => ({
+            projectId,
+            messageId: row.id,
+            channel,
+            recipientSub,
+            authorSub: actor.sub,
+            authorEmail: actor.email,
+            messagePreview: preview,
+          }))
+      );
+    }
     await repo.markChatMessagesRead([{ messageId: row.id, userSub: actor.sub, readAt: new Date() }]);
     await repo.createAuditLog({
       actorSub: actor.sub,
@@ -675,7 +691,40 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (!uniqueIds.length) return { marked: 0 };
 
     await repo.markChatMessagesRead(uniqueIds.map((id) => ({ messageId: id, userSub: actor.sub, readAt: new Date() })));
+    await repo.markMentionNotificationsSeenByMessages(actor.sub, uniqueIds);
     return { marked: uniqueIds.length };
+  },
+
+  listUnreadMentionNotifications: async (actor: Actor) => {
+    const rows = await repo.listUnreadMentionNotificationsByUser(actor.sub);
+    const authorSubs = [...new Set(rows.map((r) => r.authorSub).filter((v): v is string => Boolean(v)))];
+    const profileMap = await fetchUserProfiles(authorSubs, actor);
+    return rows.map((row) => {
+      const profile = row.authorSub ? profileMap.get(row.authorSub) : undefined;
+      const authorName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim();
+      return {
+        id: row.id,
+        project_id: row.projectId,
+        project_name: row.projectName,
+        message_id: row.messageId,
+        channel: row.channel,
+        created_at: row.createdAt,
+        message_preview: row.messagePreview,
+        author_sub: row.authorSub,
+        author_email: row.authorEmail,
+        author_name: authorName || row.authorEmail || "Sistema",
+      };
+    });
+  },
+
+  countUnreadMentionNotifications: async (actor: Actor) => {
+    return repo.countUnreadMentionNotificationsByUser(actor.sub);
+  },
+
+  markMentionNotificationSeen: async (actor: Actor, notificationId: string) => {
+    const updated = await repo.markMentionNotificationSeen(notificationId, actor.sub);
+    if (!updated) throw new NotFoundError("Notificacion no encontrada o ya vista");
+    return { id: updated.id, is_seen: true, seen_at: updated.seenAt };
   },
 
   createMinorChangeRequest: async (
