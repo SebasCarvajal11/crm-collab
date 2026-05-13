@@ -10,6 +10,7 @@ import {
   ChangeRequestIdParamSchema,
   ColumnIdParamSchema,
   CreateChatMessageSchema,
+  MarkChatReadSchema,
   CreateColumnSchema,
   CreateFileSchema,
   CreateFormalChangeRequestSchema,
@@ -22,6 +23,7 @@ import {
   ProjectIdParamSchema,
   ProjectTaskIdParamSchema,
   ResolveChangeRequestSchema,
+  UpdateProjectFileSchema,
   TaskIdParamSchema,
   UpdateColumnSchema,
   UpdateProjectSchema,
@@ -105,6 +107,12 @@ collabRoutes.post(
   zValidator("json", CreateChatMessageSchema),
   collabController.postInternalChat
 );
+collabRoutes.post(
+  "/projects/:projectId/chat/internal/read",
+  zValidator("param", ProjectIdParamSchema),
+  zValidator("json", MarkChatReadSchema),
+  collabController.markInternalChatRead
+);
 collabRoutes.get(
   "/projects/:projectId/chat/external",
   zValidator("param", ProjectIdParamSchema),
@@ -115,6 +123,12 @@ collabRoutes.post(
   zValidator("param", ProjectIdParamSchema),
   zValidator("json", CreateChatMessageSchema),
   collabController.postExternalChat
+);
+collabRoutes.post(
+  "/projects/:projectId/chat/external/read",
+  zValidator("param", ProjectIdParamSchema),
+  zValidator("json", MarkChatReadSchema),
+  collabController.markExternalChatRead
 );
 
 collabRoutes.post(
@@ -147,11 +161,21 @@ collabRoutes.get(
   zValidator("param", ProjectIdParamSchema),
   collabController.listFilesWithTaskInfo
 );
+collabRoutes.get(
+  "/projects/:projectId/files/timeline",
+  zValidator("param", ProjectIdParamSchema),
+  collabController.listFilesTimeline
+);
 collabRoutes.post(
   "/projects/:projectId/files",
   zValidator("param", ProjectIdParamSchema),
   zValidator("json", CreateFileSchema),
   collabController.uploadFileMetadata
+);
+collabRoutes.post(
+  "/projects/:projectId/files/upload",
+  zValidator("param", ProjectIdParamSchema),
+  collabController.uploadProjectFile
 );
 collabRoutes.patch(
   "/files/:fileId/approve",
@@ -170,6 +194,12 @@ collabRoutes.delete(
   "/files/:fileId",
   zValidator("param", FileIdParamSchema),
   collabController.deleteFile
+);
+collabRoutes.patch(
+  "/files/:fileId",
+  zValidator("param", FileIdParamSchema),
+  zValidator("json", UpdateProjectFileSchema),
+  collabController.updateProjectFile
 );
 
 /** Comentarios de tarea */

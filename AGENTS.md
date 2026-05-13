@@ -82,6 +82,7 @@ src/
 └── shared/
     ├── storage/
     │   └── oci-storage.ts          # OCI Object Storage wrapper (S3Client)
+    ├── auth-client.ts              # HTTP client para llamar a mod-auth (perfiles de usuario)
     └── middlewares/
         ├── auth.middleware.ts       # Gateway header trust + JWT fallback
         └── error-handler.middleware.ts  # AppError hierarchy + onError
@@ -120,6 +121,7 @@ Todas en `pgSchema("schema_collab")`. 10 enums personalizados.
 | `PORT` | No | `3001` | Puerto HTTP |
 | `TRUST_GATEWAY_JWT_HEADERS` | No | `true` | Confía en headers X-User-* del gateway |
 | `GATEWAY_TRUST_SECRET` | Si trust=true | — | Secreto compartido con KrakenD |
+| `MOD_AUTH_URL` | No | `http://mod-auth:3000` | URL de mod-auth para enriquecimiento de perfiles |
 | `JWT_PUBLIC_KEY` | Si trust=false | — | RS256 pública para fallback |
 | `NODE_ENV` | No | `development` | `development` / `production` / `test` |
 | `OCI_NAMESPACE` | Sí | — | Namespace del tenancy Oracle Cloud |

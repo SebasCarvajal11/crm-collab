@@ -9,12 +9,14 @@ import type {
   CreateFileBody,
   CreateFormalChangeRequestBody,
   CreateMinorChangeRequestBody,
+  MarkChatReadBody,
   CreateColumnBody,
   CreateTaskBody,
   CreateProjectBody,
   CreateTaskCommentBody,
   ProjectFiltersQuery,
   ResolveChangeRequestBody,
+  UpdateProjectFileBody,
   UpdateColumnBody,
   UpdateTaskBody,
   UpdateProjectBody,
@@ -203,6 +205,17 @@ export const createCollabController = (service: CollabService) => ({
     return c.json({ data: row }, 201);
   },
 
+  markInternalChatRead: async (c: Context<AppEnv>) => {
+    const body = validatedJson<MarkChatReadBody>(c);
+    const row = await service.markChatAsRead(
+      c.get("user"),
+      requiredParam(c, "projectId"),
+      "internal",
+      { upToMessageId: body.up_to_message_id, messageIds: body.message_ids ?? [] }
+    );
+    return c.json({ data: row }, 200);
+  },
+
   listExternalChat: async (c: Context<AppEnv>) => {
     const rows = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "external");
     return c.json({ data: rows }, 200);
@@ -219,6 +232,17 @@ export const createCollabController = (service: CollabService) => ({
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
     return c.json({ data: row }, 201);
+  },
+
+  markExternalChatRead: async (c: Context<AppEnv>) => {
+    const body = validatedJson<MarkChatReadBody>(c);
+    const row = await service.markChatAsRead(
+      c.get("user"),
+      requiredParam(c, "projectId"),
+      "external",
+      { upToMessageId: body.up_to_message_id, messageIds: body.message_ids ?? [] }
+    );
+    return c.json({ data: row }, 200);
   },
 
   createMinorChangeRequest: async (c: Context<AppEnv>) => {
@@ -399,8 +423,80 @@ export const createCollabController = (service: CollabService) => ({
     return c.json({ data: result }, 200);
   },
 
+  updateProjectFile: async (c: Context<AppEnv>) => {
+    const body = validatedJson<UpdateProjectFileBody>(c);
+    const result = await service.updateProjectFile(
+      c.get("user"),
+      requiredParam(c, "fileId"),
+      {
+        title: body.title,
+        description: body.description,
+        taskId: body.task_id,
+        isClientVisible: body.is_client_visible,
+      },
+      { ipAddress: getIp(c), userAgent: getUa(c) }
+    );
+    return c.json({ data: result }, 200);
+  },
+
   listFilesWithTaskInfo: async (c: Context<AppEnv>) => {
     const rows = await service.listFilesWithTaskInfo(c.get("user"), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
+  },
+
+  listFilesTimeline: async (c: Context<AppEnv>) => {
+    const rows = await service.listFilesWithTaskInfo(c.get("user"), requiredParam(c, "projectId"));
+    return c.json({ data: rows }, 200);
+  },
+
+  uploadProjectFile: async (c: Context<AppEnv>) => {
+    const user = c.get("user");
+    const projectId = requiredParam(c, "projectId");
+    const formData = await c.req.parseBody({ all: true });
+
+    const file = formData["file"] as File | undefined;
+    if (!file || typeof file === "string") {
+      return c.json({ error: "Se requiere el archivo (campo 'file')" }, 400);
+    }
+
+    const title = (formData["title"] as string | undefined)?.trim();
+    if (!title) {
+      return c.json({ error: "Se requiere el titulo del archivo" }, 400);
+    }
+
+    const description = (formData["description"] as string | undefined)?.trim() ?? null;
+    const taskId = (formData["task_id"] as string | undefined)?.trim() || null;
+    const channel = ((formData["channel"] as string | undefined)?.trim() || "external") as "internal" | "external";
+    if (channel !== "internal" && channel !== "external") {
+      return c.json({ error: "El campo 'channel' debe ser 'internal' o 'external'" }, 400);
+    }
+
+    const MAX_BYTES = 25 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      return c.json({ error: "El archivo supera el limite de 25 MB" }, 400);
+    }
+
+    const fileBuffer = Buffer.from(await file.arrayBuffer());
+    const isClientVisible = formData["is_client_visible"] === "true";
+
+    const row = await service.uploadProjectFile(
+      user,
+      projectId,
+      {
+        taskId,
+        title,
+        description,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        fileBuffer,
+        isClientVisible,
+        channel,
+        authorEmail: user.email,
+      },
+      { ipAddress: getIp(c), userAgent: getUa(c) }
+    );
+
+    return c.json({ data: row }, 201);
   },
 });

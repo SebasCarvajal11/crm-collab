@@ -10,6 +10,7 @@ import {
   bigserial,
   primaryKey,
   uniqueIndex,
+  index,
   bigint,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -117,85 +118,119 @@ export const projectMembers = collabSchema.table(
   (t) => [primaryKey({ columns: [t.projectId, t.userSub] })]
 );
 
-export const projectTaskColumns = collabSchema.table("project_task_columns", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  key: taskColumnKeyEnum("key").notNull(),
-  title: varchar("title", { length: 80 }).notNull(),
-  position: integer("position").notNull(),
-  isClientVisible: boolean("is_client_visible").default(false).notNull(),
-  isDefault: boolean("is_default").default(true).notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const projectTaskColumns = collabSchema.table(
+  "project_task_columns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    key: taskColumnKeyEnum("key").notNull(),
+    title: varchar("title", { length: 80 }).notNull(),
+    position: integer("position").notNull(),
+    isClientVisible: boolean("is_client_visible").default(false).notNull(),
+    isDefault: boolean("is_default").default(true).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_project_task_columns_project_id").on(t.projectId)]
+);
 
-export const projectTasks = collabSchema.table("project_tasks", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  columnId: uuid("column_id")
-    .notNull()
-    .references(() => projectTaskColumns.id, { onDelete: "cascade" }),
-  title: varchar("title", { length: 180 }).notNull(),
-  description: text("description"),
-  priority: taskPriorityEnum("priority").default("medium").notNull(),
-  assigneeSub: uuid("assignee_sub"),
-  reporterSub: uuid("reporter_sub").notNull(),
-  deadline: timestamp("deadline", { mode: "date" }),
-  checklistProgress: integer("checklist_progress").default(0).notNull(),
-  subtasks: jsonb("subtasks"),
-  blockedByTaskId: uuid("blocked_by_task_id"),
-  isClientVisible: boolean("is_client_visible").default(false).notNull(),
-  position: integer("position").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const projectTasks = collabSchema.table(
+  "project_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    columnId: uuid("column_id")
+      .notNull()
+      .references(() => projectTaskColumns.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 180 }).notNull(),
+    description: text("description"),
+    priority: taskPriorityEnum("priority").default("medium").notNull(),
+    assigneeSub: uuid("assignee_sub"),
+    reporterSub: uuid("reporter_sub").notNull(),
+    deadline: timestamp("deadline", { mode: "date" }),
+    checklistProgress: integer("checklist_progress").default(0).notNull(),
+    subtasks: jsonb("subtasks"),
+    blockedByTaskId: uuid("blocked_by_task_id"),
+    isClientVisible: boolean("is_client_visible").default(false).notNull(),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_project_tasks_project_id").on(t.projectId)]
+);
 
-export const projectChatMessages = collabSchema.table("project_chat_messages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  channel: chatChannelEnum("channel").notNull(),
-  messageType: chatMessageTypeEnum("message_type").default("text").notNull(),
-  authorSub: uuid("author_sub"),
-  authorEmail: varchar("author_email", { length: 255 }),
-  body: text("body").notNull(),
-  mentionedSubs: jsonb("mentioned_subs"),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const projectChatMessages = collabSchema.table(
+  "project_chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    channel: chatChannelEnum("channel").notNull(),
+    messageType: chatMessageTypeEnum("message_type").default("text").notNull(),
+    authorSub: uuid("author_sub"),
+    authorEmail: varchar("author_email", { length: 255 }),
+    body: text("body").notNull(),
+    mentionedSubs: jsonb("mentioned_subs"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_project_chat_messages_project_id").on(t.projectId)]
+);
 
-export const projectFiles = collabSchema.table("project_files", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  /** FK opcional a la tarea que originó este archivo (carga desde tarea). */
-  taskId: uuid("task_id").references(() => projectTasks.id, { onDelete: "set null" }),
-  /** Título legible del archivo (obligatorio cuando se sube desde una tarea). */
-  title: varchar("title", { length: 200 }),
-  /** Descripción del archivo (obligatorio cuando se sube desde una tarea). */
-  description: text("description"),
-  origin: fileOriginEnum("origin").notNull(),
-  folder: fileFolderEnum("folder").notNull(),
-  fileName: varchar("file_name", { length: 255 }).notNull(),
-  storagePath: text("storage_path").notNull(),
-  mimeType: varchar("mime_type", { length: 120 }).notNull(),
-  sizeBytes: bigint("size_bytes", { mode: "number" }).default(0).notNull(),
-  version: integer("version").default(1).notNull(),
-  isActive: boolean("is_active").default(true).notNull(),
-  isClientVisible: boolean("is_client_visible").default(false).notNull(),
-  approvedByClient: boolean("approved_by_client").default(false).notNull(),
-  approvedBySub: uuid("approved_by_sub"),
-  approvedAt: timestamp("approved_at", { mode: "date" }),
-  createdBySub: uuid("created_by_sub").notNull(),
-  createdByEmail: varchar("created_by_email", { length: 255 }),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const projectChatMessageReads = collabSchema.table(
+  "project_chat_message_reads",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => projectChatMessages.id, { onDelete: "cascade" }),
+    userSub: uuid("user_sub").notNull(),
+    readAt: timestamp("read_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.messageId, t.userSub] }),
+    index("idx_project_chat_message_reads_user_sub").on(t.userSub),
+  ]
+);
+
+export const projectFiles = collabSchema.table(
+  "project_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** FK opcional a la tarea que originó este archivo (carga desde tarea). */
+    taskId: uuid("task_id").references(() => projectTasks.id, { onDelete: "set null" }),
+    /** Título legible del archivo (obligatorio cuando se sube desde una tarea). */
+    title: varchar("title", { length: 200 }),
+    /** Descripción del archivo (obligatorio cuando se sube desde una tarea). */
+    description: text("description"),
+    origin: fileOriginEnum("origin").notNull(),
+    folder: fileFolderEnum("folder").notNull(),
+    fileName: varchar("file_name", { length: 255 }).notNull(),
+    storagePath: text("storage_path").notNull(),
+    mimeType: varchar("mime_type", { length: 120 }).notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }).default(0).notNull(),
+    version: integer("version").default(1).notNull(),
+    isActive: boolean("is_active").default(true).notNull(),
+    isClientVisible: boolean("is_client_visible").default(false).notNull(),
+    approvedByClient: boolean("approved_by_client").default(false).notNull(),
+    approvedBySub: uuid("approved_by_sub"),
+    approvedAt: timestamp("approved_at", { mode: "date" }),
+    createdBySub: uuid("created_by_sub").notNull(),
+    createdByEmail: varchar("created_by_email", { length: 255 }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_project_files_project_id").on(t.projectId),
+    index("idx_project_files_task_id").on(t.taskId),
+  ]
+);
 
 // ─── Asignados de tarea (múltiples trabajadores por tarea) ─────────────────
 
@@ -209,21 +244,28 @@ export const projectTaskAssignees = collabSchema.table(
     userEmail: varchar("user_email", { length: 255 }).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [primaryKey({ columns: [t.taskId, t.userSub] })]
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.userSub] }),
+    index("idx_task_assignees_task_id").on(t.taskId),
+  ]
 );
 
 // ─── Comentarios de tarea ──────────────────────────────────────────────────
 
-export const projectTaskComments = collabSchema.table("project_task_comments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  taskId: uuid("task_id")
-    .notNull()
-    .references(() => projectTasks.id, { onDelete: "cascade" }),
-  authorSub: uuid("author_sub").notNull(),
-  authorEmail: varchar("author_email", { length: 255 }).notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const projectTaskComments = collabSchema.table(
+  "project_task_comments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => projectTasks.id, { onDelete: "cascade" }),
+    authorSub: uuid("author_sub").notNull(),
+    authorEmail: varchar("author_email", { length: 255 }).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_task_comments_task_id").on(t.taskId)]
+);
 
 export const projectBriefs = collabSchema.table("project_briefs", {
   projectId: uuid("project_id")
@@ -234,38 +276,46 @@ export const projectBriefs = collabSchema.table("project_briefs", {
   updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
 });
 
-export const projectChangeRequests = collabSchema.table("project_change_requests", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  taskId: uuid("task_id").references(() => projectTasks.id, { onDelete: "set null" }),
-  type: changeRequestTypeEnum("type").notNull(),
-  status: changeRequestStatusEnum("status").default("open").notNull(),
-  requestedBySub: uuid("requested_by_sub").notNull(),
-  resolvedBySub: uuid("resolved_by_sub"),
-  title: varchar("title", { length: 200 }).notNull(),
-  description: text("description").notNull(),
-  justification: text("justification"),
-  channelMessageId: uuid("channel_message_id"),
-  escalatedByWorkerSub: uuid("escalated_by_worker_sub"),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-  resolvedAt: timestamp("resolved_at", { mode: "date" }),
-});
+export const projectChangeRequests = collabSchema.table(
+  "project_change_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    taskId: uuid("task_id").references(() => projectTasks.id, { onDelete: "set null" }),
+    type: changeRequestTypeEnum("type").notNull(),
+    status: changeRequestStatusEnum("status").default("open").notNull(),
+    requestedBySub: uuid("requested_by_sub").notNull(),
+    resolvedBySub: uuid("resolved_by_sub"),
+    title: varchar("title", { length: 200 }).notNull(),
+    description: text("description").notNull(),
+    justification: text("justification"),
+    channelMessageId: uuid("channel_message_id"),
+    escalatedByWorkerSub: uuid("escalated_by_worker_sub"),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    resolvedAt: timestamp("resolved_at", { mode: "date" }),
+  },
+  (t) => [index("idx_project_change_requests_project_id").on(t.projectId)]
+);
 
-export const projectBriefChangeLog = collabSchema.table("project_brief_change_log", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  projectId: uuid("project_id")
-    .notNull()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  requestedBySub: uuid("requested_by_sub").notNull(),
-  approvedBySub: uuid("approved_by_sub"),
-  description: text("description").notNull(),
-  sourceChangeRequestId: uuid("source_change_request_id").references(() => projectChangeRequests.id, {
-    onDelete: "set null",
-  }),
-  createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
-});
+export const projectBriefChangeLog = collabSchema.table(
+  "project_brief_change_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    requestedBySub: uuid("requested_by_sub").notNull(),
+    approvedBySub: uuid("approved_by_sub"),
+    description: text("description").notNull(),
+    sourceChangeRequestId: uuid("source_change_request_id").references(() => projectChangeRequests.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_project_brief_change_log_project_id").on(t.projectId)]
+);
 
 export const auditLogs = collabSchema.table(
   "audit_logs",

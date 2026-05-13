@@ -138,6 +138,13 @@ export const CreateChatMessageSchema = z.object({
   mentions: z.array(z.string().uuid()).max(25).optional(),
 });
 
+export const MarkChatReadSchema = z.object({
+  up_to_message_id: z.string().uuid().optional(),
+  message_ids: z.array(z.string().uuid()).max(200).optional(),
+}).refine((v) => Boolean(v.up_to_message_id || (v.message_ids && v.message_ids.length > 0)), {
+  message: "Debes enviar up_to_message_id o message_ids",
+});
+
 export const CreateFileSchema = z.object({
   file_name: z.string().min(1).max(255),
   storage_path: z.string().min(1).max(5000),
@@ -150,6 +157,13 @@ export const CreateFileSchema = z.object({
 
 export const ApproveFileSchema = z.object({
   approve: z.boolean(),
+});
+
+export const UpdateProjectFileSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  task_id: z.string().uuid().nullable().optional(),
+  is_client_visible: z.boolean().optional(),
 });
 
 export const BriefPatchSchema = z.object({
@@ -182,8 +196,10 @@ export type UpdateColumnBody = z.infer<typeof UpdateColumnSchema>;
 export type CreateTaskBody = z.infer<typeof CreateTaskSchema>;
 export type UpdateTaskBody = z.infer<typeof UpdateTaskSchema>;
 export type CreateChatMessageBody = z.infer<typeof CreateChatMessageSchema>;
+export type MarkChatReadBody = z.infer<typeof MarkChatReadSchema>;
 export type CreateFileBody = z.infer<typeof CreateFileSchema>;
 export type ApproveFileBody = z.infer<typeof ApproveFileSchema>;
+export type UpdateProjectFileBody = z.infer<typeof UpdateProjectFileSchema>;
 export type BriefPatchBody = z.infer<typeof BriefPatchSchema>;
 export type CreateMinorChangeRequestBody = z.infer<typeof CreateMinorChangeRequestSchema>;
 export type CreateFormalChangeRequestBody = z.infer<typeof CreateFormalChangeRequestSchema>;

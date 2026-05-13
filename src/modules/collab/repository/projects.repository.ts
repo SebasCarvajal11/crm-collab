@@ -12,6 +12,7 @@ import {
   projectTaskColumns,
   projectTaskComments,
   projectTasks,
+  projectChatMessageReads,
 } from "../../../db/schema";
 import type {
   NewProject,
@@ -25,6 +26,7 @@ import type {
   NewProjectMember,
   NewProjectTask,
   NewProjectTaskColumn,
+  NewProjectChatMessageRead,
 } from "../collab.types";
 
 export const projectsRepository = {
@@ -238,6 +240,26 @@ export const projectsRepository = {
       .where(and(eq(projectChatMessages.projectId, projectId), eq(projectChatMessages.channel, channel)))
       .orderBy(asc(projectChatMessages.createdAt)),
 
+  markChatMessagesRead: async (rows: NewProjectChatMessageRead[]) => {
+    if (!rows.length) return [];
+    return db
+      .insert(projectChatMessageReads)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: [projectChatMessageReads.messageId, projectChatMessageReads.userSub],
+        set: { readAt: new Date() },
+      })
+      .returning();
+  },
+
+  listChatReadsByMessages: async (messageIds: string[]) => {
+    if (!messageIds.length) return [];
+    return db
+      .select()
+      .from(projectChatMessageReads)
+      .where(inArray(projectChatMessageReads.messageId, messageIds));
+  },
+
   createFile: async (payload: NewProjectFile) => {
     const [row] = await db.insert(projectFiles).values(payload).returning();
     return row;
@@ -366,14 +388,16 @@ export const projectsRepository = {
   // ─── Asignados de tarea ────────────────────────────────────────────────
 
   upsertTaskAssignees: async (taskId: string, assignees: { userSub: string; userEmail: string }[]) => {
-    await db.delete(projectTaskAssignees).where(eq(projectTaskAssignees.taskId, taskId));
-    if (!assignees.length) return [];
-    const values: NewProjectTaskAssignee[] = assignees.map((a) => ({
-      taskId,
-      userSub: a.userSub,
-      userEmail: a.userEmail,
-    }));
-    return db.insert(projectTaskAssignees).values(values).returning();
+    return db.transaction(async (tx) => {
+      await tx.delete(projectTaskAssignees).where(eq(projectTaskAssignees.taskId, taskId));
+      if (!assignees.length) return [];
+      const values: NewProjectTaskAssignee[] = assignees.map((a) => ({
+        taskId,
+        userSub: a.userSub,
+        userEmail: a.userEmail,
+      }));
+      return tx.insert(projectTaskAssignees).values(values).returning();
+    });
   },
 
   listTaskAssignees: async (taskId: string) =>
@@ -454,6 +478,23 @@ export const projectsRepository = {
 
   deleteFileById: async (fileId: string) => {
     await db.delete(projectFiles).where(eq(projectFiles.id, fileId));
+  },
+
+  updateFileById: async (
+    fileId: string,
+    patch: { title?: string; description?: string | null; taskId?: string | null; isClientVisible?: boolean }
+  ) => {
+    const [row] = await db
+      .update(projectFiles)
+      .set({
+        title: patch.title,
+        description: patch.description,
+        taskId: patch.taskId,
+        isClientVisible: patch.isClientVisible,
+      })
+      .where(eq(projectFiles.id, fileId))
+      .returning();
+    return row ?? null;
   },
 
   listTaskFiles: async (taskId: string) =>

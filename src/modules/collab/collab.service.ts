@@ -3,6 +3,7 @@ import type { GlobalRole, ProjectMemberRole, ProjectType } from "./collab.types"
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/middlewares/error-handler.middleware";
 import { collabEvents } from "./events";
 import { ociStorage } from "../../shared/storage/oci-storage";
+import { fetchUserProfiles } from "../../shared/auth-client";
 
 type Actor = { sub: string; role: GlobalRole; email: string };
 type RequestMeta = { ipAddress: string; userAgent: string };
@@ -13,6 +14,12 @@ const canMoveTasks = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
   globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
 const canInternalChat = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
   globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
+
+const allowedMentionRolesByActor = (actorRole: GlobalRole): ProjectMemberRole[] => {
+  if (actorRole === "admin") return ["admin", "worker", "client"];
+  if (actorRole === "worker") return ["worker", "client"];
+  return ["worker"];
+};
 
 const defaultColumnsByType = (type: ProjectType) =>
   type === "campaign_service"
@@ -149,7 +156,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     await repo.createProjectMember({
       projectId: project.id,
       userSub: actor.sub,
-      role: actor.role === "admin" ? "admin" : "worker",
+      role: "admin",
       userEmail: actor.email,
     });
     if (payload.clientSub) {
@@ -249,13 +256,22 @@ export const createCollabService = (repo: CollabRepository) => ({
       }
     }
 
+    // Enrich members with profiles from mod-auth (email, role_label)
+    const userSubs = [...new Set(members.map((m) => m.userSub).filter(Boolean))];
+    const profileMap = await fetchUserProfiles(userSubs, actor);
+
     const enrichedMembers = members.map((m) => ({
       ...m,
-      email: m.userEmail ?? assigneeMap.get(m.userSub)?.email ?? null,
+      email: m.userEmail ?? assigneeMap.get(m.userSub)?.email ?? profileMap.get(m.userSub)?.email ?? null,
       taskCount: taskSubCount.get(m.userSub) ?? 0,
+      role_label: profileMap.get(m.userSub)?.role ?? m.role,
     }));
 
-    return { project, members: enrichedMembers, board: { columns, tasks }, brief, formalChanges };
+    const isClient = actor.role === "client";
+    const visibleColumns = isClient ? columns.filter((c) => c.isClientVisible) : columns;
+    const visibleTasks = isClient ? tasks.filter((t) => t.isClientVisible) : tasks;
+
+    return { project, members: enrichedMembers, board: { columns: visibleColumns, tasks: visibleTasks }, brief, formalChanges };
   },
 
 
@@ -514,7 +530,35 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
       throw new ForbiddenError("No tienes acceso al chat interno");
     }
-    return repo.listChatMessagesByChannel(projectId, channel);
+    const [messages, members] = await Promise.all([
+      repo.listChatMessagesByChannel(projectId, channel),
+      repo.listProjectMembers(projectId),
+    ]);
+    const reads = await repo.listChatReadsByMessages(messages.map((m) => m.id));
+    const readersByMessage = new Map<string, Set<string>>();
+    for (const read of reads) {
+      if (!readersByMessage.has(read.messageId)) readersByMessage.set(read.messageId, new Set());
+      readersByMessage.get(read.messageId)!.add(read.userSub);
+    }
+    const memberSubs = new Set(members.map((m) => m.userSub));
+
+    return messages.map((msg) => {
+      const readers = readersByMessage.get(msg.id) ?? new Set<string>();
+      const mentioned = ((msg.mentionedSubs ?? []) as string[]).filter((sub) => memberSubs.has(sub));
+      const required = mentioned.length > 0
+        ? mentioned.filter((sub) => sub !== msg.authorSub)
+        : members.map((m) => m.userSub).filter((sub) => sub !== msg.authorSub);
+      const seenCount = required.filter((sub) => readers.has(sub)).length;
+      const isSeen = required.length === 0 ? true : seenCount === required.length;
+      return {
+        ...msg,
+        readStatus: {
+          isSeen,
+          requiredCount: required.length,
+          seenCount,
+        },
+      };
+    });
   },
 
   postChatMessage: async (
@@ -529,6 +573,21 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
       throw new ForbiddenError("No tienes acceso al chat interno");
     }
+    const projectMembers = await repo.listProjectMembers(projectId);
+    const allowedTargetRoles = new Set(allowedMentionRolesByActor(actor.role));
+    const memberRoleBySub = new Map(projectMembers.map((m) => [m.userSub, m.role]));
+
+    const mentionSubs = [...new Set(mentions ?? [])];
+    for (const mentionedSub of mentionSubs) {
+      const targetRole = memberRoleBySub.get(mentionedSub);
+      if (!targetRole) {
+        throw new BadRequestError("Solo puedes mencionar participantes del proyecto");
+      }
+      if (!allowedTargetRoles.has(targetRole)) {
+        throw new ForbiddenError("No tienes permiso para mencionar ese rol en este proyecto");
+      }
+    }
+
     const row = await repo.createChatMessage({
       projectId,
       channel,
@@ -536,8 +595,9 @@ export const createCollabService = (repo: CollabRepository) => ({
       authorSub: actor.sub,
       authorEmail: actor.email,
       body,
-      mentionedSubs: mentions ?? [],
+      mentionedSubs: mentionSubs,
     });
+    await repo.markChatMessagesRead([{ messageId: row.id, userSub: actor.sub, readAt: new Date() }]);
     await repo.createAuditLog({
       actorSub: actor.sub,
       action: `chat_${channel}_message_created`,
@@ -556,16 +616,48 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
 
     // Emit mention events if any
-    if (mentions && mentions.length > 0) {
+    if (mentionSubs.length > 0) {
       await collabEvents.emit("chat.mention", projectId, actor.sub, {
         messageId: row.id,
         channel,
-        mentionedSubs: mentions,
+        mentionedSubs: mentionSubs,
         body,
       });
     }
 
     return row;
+  },
+
+  markChatAsRead: async (
+    actor: Actor,
+    projectId: string,
+    channel: "internal" | "external",
+    payload: { upToMessageId?: string; messageIds: string[] }
+  ) => {
+    const { member } = await assertProjectAccess(repo, actor, projectId);
+    if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
+      throw new ForbiddenError("No tienes acceso al chat interno");
+    }
+
+    const messages = await repo.listChatMessagesByChannel(projectId, channel);
+    const idsInChannel = new Set(messages.map((m) => m.id));
+    const rowsToMark: string[] = [];
+
+    if (payload.upToMessageId) {
+      const upToIdx = messages.findIndex((m) => m.id === payload.upToMessageId);
+      if (upToIdx >= 0) {
+        for (let i = 0; i <= upToIdx; i++) rowsToMark.push(messages[i].id);
+      }
+    }
+    for (const id of payload.messageIds) {
+      if (idsInChannel.has(id)) rowsToMark.push(id);
+    }
+
+    const uniqueIds = [...new Set(rowsToMark)];
+    if (!uniqueIds.length) return { marked: 0 };
+
+    await repo.markChatMessagesRead(uniqueIds.map((id) => ({ messageId: id, userSub: actor.sub, readAt: new Date() })));
+    return { marked: uniqueIds.length };
   },
 
   createMinorChangeRequest: async (
@@ -878,7 +970,7 @@ export const createCollabService = (repo: CollabRepository) => ({
   ) => {
     const task = await repo.findTaskById(taskId);
     if (!task) throw new NotFoundError("Tarea no encontrada");
-    const { member } = await assertProjectAccess(repo, actor, task.projectId);
+    await assertProjectAccess(repo, actor, task.projectId);
     if (actor.role === "client" && !task.isClientVisible) {
       throw new ForbiddenError("No tienes acceso a esta tarea");
     }
@@ -896,7 +988,6 @@ export const createCollabService = (repo: CollabRepository) => ({
       ipAddress: meta.ipAddress,
       userAgent: meta.userAgent,
     });
-    void member; // used for access check above
     return comment;
   },
 
@@ -965,6 +1056,76 @@ export const createCollabService = (repo: CollabRepository) => ({
     return file;
   },
 
+  uploadProjectFile: async (
+    actor: Actor,
+    projectId: string,
+    payload: {
+      taskId: string | null;
+      title: string;
+      description: string | null;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+      fileBuffer: Buffer;
+      isClientVisible: boolean;
+      channel: "internal" | "external";
+      authorEmail: string;
+    },
+    meta: RequestMeta
+  ) => {
+    const MAX_BYTES = 25 * 1024 * 1024;
+    if (payload.sizeBytes > MAX_BYTES) throw new BadRequestError("El archivo supera el limite de 25 MB");
+    const { member } = await assertProjectAccess(repo, actor, projectId);
+
+    if (payload.channel === "internal" && !canInternalChat(actor.role, member?.role)) {
+      throw new ForbiddenError("No tienes acceso al canal interno");
+    }
+
+    let taskId: string | null = null;
+    if (payload.taskId) {
+      const task = await repo.findTaskById(payload.taskId);
+      if (!task || task.projectId !== projectId) throw new BadRequestError("La tarea no pertenece al proyecto");
+      taskId = task.id;
+    }
+
+    const storagePath = taskId
+      ? `projects/${projectId}/tasks/${taskId}/${payload.fileName}`
+      : `projects/${projectId}/files/${payload.fileName}`;
+
+    await ociStorage.uploadObject(storagePath, payload.fileBuffer, payload.mimeType);
+
+    const file = await repo.createFileForTask({
+      projectId,
+      taskId,
+      title: payload.title,
+      description: payload.description,
+      origin: payload.channel === "internal" ? "internal_chat" : "external_chat",
+      folder: "shared_deliverables",
+      fileName: payload.fileName,
+      storagePath,
+      mimeType: payload.mimeType,
+      sizeBytes: payload.sizeBytes,
+      isClientVisible: payload.isClientVisible,
+      isActive: true,
+      approvedByClient: false,
+      version: 1,
+      createdBySub: actor.sub,
+      createdByEmail: payload.authorEmail,
+    });
+
+    await repo.createAuditLog({
+      actorSub: actor.sub,
+      action: "project_file_uploaded_from_conversation",
+      resourceType: "project_file",
+      resourceId: file.id,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      details: { taskId, channel: payload.channel, fileName: payload.fileName, sizeBytes: payload.sizeBytes },
+    });
+
+    return file;
+  },
+
   listFilesWithTaskInfo: async (actor: Actor, projectId: string) => {
     await assertProjectAccess(repo, actor, projectId);
     return repo.listFilesWithTaskInfo(projectId, actor.role === "client");
@@ -997,6 +1158,44 @@ export const createCollabService = (repo: CollabRepository) => ({
       details: { fileName: file.fileName, storagePath: file.storagePath },
     });
     return { deleted: true };
+  },
+
+  updateProjectFile: async (
+    actor: Actor,
+    fileId: string,
+    patch: { title?: string; description?: string | null; taskId?: string | null; isClientVisible?: boolean },
+    meta: RequestMeta
+  ) => {
+    const file = await repo.findFileById(fileId);
+    if (!file) throw new NotFoundError("Archivo no encontrado");
+    const { member } = await assertProjectAccess(repo, actor, file.projectId);
+    if (!canMoveTasks(actor.role, member?.role)) throw new ForbiddenError("No autorizado para editar archivos");
+
+    let taskId = patch.taskId;
+    if (patch.taskId) {
+      const task = await repo.findTaskById(patch.taskId);
+      if (!task || task.projectId !== file.projectId) throw new BadRequestError("La tarea no pertenece al proyecto");
+      taskId = task.id;
+    }
+
+    const updated = await repo.updateFileById(fileId, {
+      title: patch.title,
+      description: patch.description,
+      taskId,
+      isClientVisible: patch.isClientVisible,
+    });
+    if (!updated) throw new NotFoundError("Archivo no encontrado");
+
+    await repo.createAuditLog({
+      actorSub: actor.sub,
+      action: "project_file_updated",
+      resourceType: "project_file",
+      resourceId: fileId,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      details: { taskId: taskId ?? null },
+    });
+    return updated;
   },
 });
 
