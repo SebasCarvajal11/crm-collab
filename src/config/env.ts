@@ -24,6 +24,7 @@ const envSchema = z
     JWT_PUBLIC_KEY: pemFromEnv.optional(),
     JWT_ISS: z.string().optional(),
     MOD_AUTH_URL: z.string().url().default("http://mod-auth:3000"),
+    MOD_MEDIA_URL: z.string().url().default("http://localhost:3002"),
     // Oracle Cloud Object Storage (S3-compatible)
     OCI_NAMESPACE: z.string().min(1, "OCI_NAMESPACE es requerida"),
     OCI_REGION: z.string().min(1, "OCI_REGION es requerida"),

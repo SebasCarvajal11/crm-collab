@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import type { AppEnv } from "../../shared/middlewares/auth.middleware";
 import type { CollabService } from "./collab.service";
 import { validatedJson, validatedQuery } from "./validated-json";
+import { AppError } from "../../shared/middlewares/error-handler.middleware";
 import type {
   ApproveFileBody,
   BriefPatchBody,
@@ -15,12 +16,19 @@ import type {
   CreateProjectBody,
   CreateTaskCommentBody,
   ProjectFiltersQuery,
+  ProjectTasksQuery,
+  ChatMessageQuery,
+  ProjectFilesQuery,
+  FormalChangeLogQuery,
+  ProjectSearchQuery,
   ResolveChangeRequestBody,
   UpdateProjectFileBody,
   UpdateColumnBody,
   UpdateTaskBody,
   UpdateProjectBody,
+  CreateTaskFileMetadataBody,
   UpsertProjectMemberBody,
+  GenerateUploadUrlBody,
 } from "./collab.schemas";
 
 const getIp = (c: Context) =>
@@ -39,6 +47,12 @@ export const createCollabController = (service: CollabService) => ({
       adminSub: q.admin_sub,
       clientName: q.client_name,
     });
+    return c.json({ data: rows }, 200);
+  },
+
+  searchProjects: async (c: Context<AppEnv>) => {
+    const q = validatedQuery<ProjectSearchQuery>(c);
+    const rows = await service.searchProjects(c.get("user"), { q: q.q, limit: q.limit });
     return c.json({ data: rows }, 200);
   },
 
@@ -166,8 +180,13 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listTasks: async (c: Context<AppEnv>) => {
-    const rows = await service.listTasksByProject(c.get("user"), requiredParam(c, "projectId"));
-    return c.json({ data: rows }, 200);
+    const q = validatedQuery<ProjectTasksQuery>(c);
+    const result = await service.listTasksByProject(c.get("user"), requiredParam(c, "projectId"), {
+      page: q.page,
+      limit: q.limit,
+      columnId: q.column_id,
+    });
+    return c.json({ data: result }, 200);
   },
 
   updateTask: async (c: Context<AppEnv>) => {
@@ -194,8 +213,12 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listInternalChat: async (c: Context<AppEnv>) => {
-    const rows = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "internal");
-    return c.json({ data: rows }, 200);
+    const q = validatedQuery<ChatMessageQuery>(c);
+    const result = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "internal", {
+      page: q.page,
+      limit: q.limit,
+    });
+    return c.json({ data: result }, 200);
   },
 
   postInternalChat: async (c: Context<AppEnv>) => {
@@ -223,8 +246,12 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listExternalChat: async (c: Context<AppEnv>) => {
-    const rows = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "external");
-    return c.json({ data: rows }, 200);
+    const q = validatedQuery<ChatMessageQuery>(c);
+    const result = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "external", {
+      page: q.page,
+      limit: q.limit,
+    });
+    return c.json({ data: result }, 200);
   },
 
   postExternalChat: async (c: Context<AppEnv>) => {
@@ -306,13 +333,21 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listFormalChangeLog: async (c: Context<AppEnv>) => {
-    const rows = await service.listFormalChangeLog(c.get("user"), requiredParam(c, "projectId"));
-    return c.json({ data: rows }, 200);
+    const q = validatedQuery<FormalChangeLogQuery>(c);
+    const result = await service.listFormalChangeLog(c.get("user"), requiredParam(c, "projectId"), {
+      page: q.page,
+      limit: q.limit,
+    });
+    return c.json({ data: result }, 200);
   },
 
   listFiles: async (c: Context<AppEnv>) => {
-    const rows = await service.listFiles(c.get("user"), requiredParam(c, "projectId"));
-    return c.json({ data: rows }, 200);
+    const q = validatedQuery<ProjectFilesQuery>(c);
+    const result = await service.listFiles(c.get("user"), requiredParam(c, "projectId"), {
+      page: q.page,
+      limit: q.limit,
+    });
+    return c.json({ data: result }, 200);
   },
 
   uploadFileMetadata: async (c: Context<AppEnv>) => {
@@ -322,6 +357,8 @@ export const createCollabController = (service: CollabService) => ({
       requiredParam(c, "projectId"),
       {
         fileName: body.file_name,
+        title: body.title,
+        description: body.description,
         storagePath: body.storage_path,
         mimeType: body.mime_type,
         sizeBytes: body.size_bytes,
@@ -332,6 +369,21 @@ export const createCollabController = (service: CollabService) => ({
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
     return c.json({ data: row }, 201);
+  },
+
+  /**
+   * Paso 1 del flujo pre-signed para archivos de proyecto.
+   * Genera y retorna una URL prefirmada de escritura OCI.
+   * Body: { file_name, mime_type, size_bytes }
+   */
+  generateProjectFileUploadUrl: async (c: Context<AppEnv>) => {
+    const body = validatedJson<GenerateUploadUrlBody>(c);
+    const data = await service.generateProjectFileUploadUrl(
+      c.get("user"),
+      requiredParam(c, "projectId"),
+      { fileName: body.file_name, mimeType: body.mime_type, sizeBytes: body.size_bytes }
+    );
+    return c.json({ data }, 200);
   },
 
   approveFile: async (c: Context<AppEnv>) => {
@@ -386,40 +438,24 @@ export const createCollabController = (service: CollabService) => ({
     return c.json({ data: rows }, 200);
   },
 
-  uploadTaskFile: async (c: Context<AppEnv>) => {
+  uploadTaskFileMetadata: async (c: Context<AppEnv>) => {
     const user = c.get("user");
     const projectId = requiredParam(c, "projectId");
-    const taskId    = requiredParam(c, "taskId");
+    const taskId = requiredParam(c, "taskId");
+    const body = validatedJson<CreateTaskFileMetadataBody>(c);
 
-    const formData = await c.req.parseBody({ all: true });
-    const file = formData["file"] as File | undefined;
-    if (!file || typeof file === "string") {
-      return c.json({ error: "Se requiere el archivo (campo 'file')" }, 400);
-    }
-    const title       = (formData["title"] as string | undefined)?.trim();
-    const description = (formData["description"] as string | undefined)?.trim();
-    if (!title || !description) {
-      return c.json({ error: "Se requieren título y descripción del archivo" }, 400);
-    }
-    const MAX_BYTES = 25 * 1024 * 1024;
-    if (file.size > MAX_BYTES) return c.json({ error: "El archivo supera el límite de 25 MB" }, 400);
-
-    const arrayBuffer = await file.arrayBuffer();
-    const fileBuffer = Buffer.from(arrayBuffer);
-    const isClientVisible = formData["is_client_visible"] === "true";
-
-    const row = await service.uploadTaskFile(
+    const row = await service.uploadTaskFileMetadata(
       user,
       projectId,
       taskId,
       {
-        title,
-        description,
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-        fileBuffer,
-        isClientVisible,
+        title: body.title,
+        description: body.description,
+        fileName: body.file_name,
+        storagePath: body.storage_path,
+        mimeType: body.mime_type,
+        sizeBytes: body.size_bytes,
+        isClientVisible: body.is_client_visible,
         authorEmail: user.email,
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
@@ -427,12 +463,42 @@ export const createCollabController = (service: CollabService) => ({
     return c.json({ data: row }, 201);
   },
 
+  /**
+   * Paso 1 del flujo pre-signed para archivos de tarea.
+   * Genera y retorna una URL prefirmada de escritura OCI.
+   * Body: { file_name, mime_type, size_bytes }
+   */
+  generateTaskFileUploadUrl: async (c: Context<AppEnv>) => {
+    const body = validatedJson<GenerateUploadUrlBody>(c);
+    const data = await service.generateTaskFileUploadUrl(
+      c.get("user"),
+      requiredParam(c, "projectId"),
+      requiredParam(c, "taskId"),
+      { fileName: body.file_name, mimeType: body.mime_type, sizeBytes: body.size_bytes }
+    );
+    return c.json({ data }, 200);
+  },
+
   downloadFile: async (c: Context<AppEnv>) => {
-    const { file, stream } = await service.downloadTaskFile(c.get("user"), requiredParam(c, "fileId"));
-    c.header("Content-Type", file.mimeType);
-    c.header("Content-Disposition", `attachment; filename="${file.fileName}"`);
-    c.header("Content-Length", String(file.sizeBytes));
-    return c.body(stream as unknown as ReadableStream);
+    const fileId = requiredParam(c, "fileId");
+    const preview = c.req.query("preview") === "true";
+    const { file, url } = await service.getFileAccess(c.get("user"), fileId, !preview);
+    const upstream = await fetch(url);
+    if (!upstream.ok) throw new AppError(502, "No se pudo obtener el archivo desde mod-media");
+    const bytes = new Uint8Array(await upstream.arrayBuffer());
+    const disposition = preview ? "inline" : "attachment";
+    c.header("Content-Type", file.mimeType || "application/octet-stream");
+    c.header("Content-Disposition", `${disposition}; filename="${file.fileName}"`);
+    c.header("Content-Length", String(bytes.length));
+    c.header("Cache-Control", "no-store");
+    return c.newResponse(bytes, 200);
+  },
+
+  getFileAccess: async (c: Context<AppEnv>) => {
+    const fileId = requiredParam(c, "fileId");
+    const preview = c.req.query("preview") === "true";
+    const data = await service.getFileAccess(c.get("user"), fileId, !preview);
+    return c.json({ data }, 200);
   },
 
   deleteFile: async (c: Context<AppEnv>) => {
@@ -465,59 +531,14 @@ export const createCollabController = (service: CollabService) => ({
     return c.json({ data: rows }, 200);
   },
 
-  listFilesTimeline: async (c: Context<AppEnv>) => {
-    const rows = await service.listFilesWithTaskInfo(c.get("user"), requiredParam(c, "projectId"));
+  listProjectTimeline: async (c: Context<AppEnv>) => {
+    const rows = await service.listProjectTimeline(c.get("user"), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
   },
 
-  uploadProjectFile: async (c: Context<AppEnv>) => {
-    const user = c.get("user");
-    const projectId = requiredParam(c, "projectId");
-    const formData = await c.req.parseBody({ all: true });
-
-    const file = formData["file"] as File | undefined;
-    if (!file || typeof file === "string") {
-      return c.json({ error: "Se requiere el archivo (campo 'file')" }, 400);
-    }
-
-    const title = (formData["title"] as string | undefined)?.trim();
-    if (!title) {
-      return c.json({ error: "Se requiere el titulo del archivo" }, 400);
-    }
-
-    const description = (formData["description"] as string | undefined)?.trim() ?? null;
-    const taskId = (formData["task_id"] as string | undefined)?.trim() || null;
-    const channel = ((formData["channel"] as string | undefined)?.trim() || "external") as "internal" | "external";
-    if (channel !== "internal" && channel !== "external") {
-      return c.json({ error: "El campo 'channel' debe ser 'internal' o 'external'" }, 400);
-    }
-
-    const MAX_BYTES = 25 * 1024 * 1024;
-    if (file.size > MAX_BYTES) {
-      return c.json({ error: "El archivo supera el limite de 25 MB" }, 400);
-    }
-
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const isClientVisible = formData["is_client_visible"] === "true";
-
-    const row = await service.uploadProjectFile(
-      user,
-      projectId,
-      {
-        taskId,
-        title,
-        description,
-        fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
-        sizeBytes: file.size,
-        fileBuffer,
-        isClientVisible,
-        channel,
-        authorEmail: user.email,
-      },
-      { ipAddress: getIp(c), userAgent: getUa(c) }
-    );
-
-    return c.json({ data: row }, 201);
+  listFilesTimeline: async (c: Context<AppEnv>) => {
+    const rows = await service.listProjectTimeline(c.get("user"), requiredParam(c, "projectId"));
+    return c.json({ data: rows }, 200);
   },
+
 });

@@ -48,6 +48,20 @@ export const ProjectFiltersQuerySchema = PaginationQuerySchema.extend({
   client_name: z.string().max(160).optional(),
 });
 
+export const ProjectTasksQuerySchema = PaginationQuerySchema.extend({
+  column_id: z.string().uuid().optional(),
+});
+
+export const ChatMessageQuerySchema = PaginationQuerySchema.extend({});
+export const ProjectFilesQuerySchema = PaginationQuerySchema.extend({});
+export const FormalChangeLogQuerySchema = PaginationQuerySchema.extend({});
+
+
+export const ProjectSearchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(20).default(8),
+});
+
 export const CreateProjectSchema = z.object({
   name: z.string().min(3).max(140),
   description: z.string().max(2000).optional().default(""),
@@ -149,6 +163,8 @@ export const MarkChatReadSchema = z.object({
 
 export const CreateFileSchema = z.object({
   file_name: z.string().min(1).max(255),
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
   storage_path: z.string().min(1).max(5000),
   mime_type: z.string().min(1).max(120),
   size_bytes: z.coerce.number().int().min(0).default(0),
@@ -166,6 +182,24 @@ export const UpdateProjectFileSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
   task_id: z.string().uuid().nullable().optional(),
   is_client_visible: z.boolean().optional(),
+});
+
+export const CreateTaskFileMetadataSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(2000),
+  file_name: z.string().min(1).max(255),
+  storage_path: z.string().min(1).max(5000),
+  mime_type: z.string().min(1).max(120),
+  size_bytes: z.coerce.number().int().min(0).default(0),
+  is_client_visible: z.boolean().default(false),
+});
+
+export const GenerateUploadUrlSchema = z.object({
+  file_name: z.string().min(1).max(255),
+  mime_type: z.string().min(1).max(120),
+  size_bytes: z.coerce.number().int().min(1).max(25 * 1024 * 1024, {
+    message: "El archivo supera el límite de 25 MB",
+  }),
 });
 
 export const BriefPatchSchema = z.object({
@@ -190,6 +224,11 @@ export const ResolveChangeRequestSchema = z.object({
 });
 
 export type ProjectFiltersQuery = z.infer<typeof ProjectFiltersQuerySchema>;
+export type ProjectTasksQuery = z.infer<typeof ProjectTasksQuerySchema>;
+export type ChatMessageQuery = z.infer<typeof ChatMessageQuerySchema>;
+export type ProjectFilesQuery = z.infer<typeof ProjectFilesQuerySchema>;
+export type FormalChangeLogQuery = z.infer<typeof FormalChangeLogQuerySchema>;
+export type ProjectSearchQuery = z.infer<typeof ProjectSearchQuerySchema>;
 export type CreateProjectBody = z.infer<typeof CreateProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof UpdateProjectSchema>;
 export type UpsertProjectMemberBody = z.infer<typeof UpsertProjectMemberSchema>;
@@ -202,8 +241,10 @@ export type MarkChatReadBody = z.infer<typeof MarkChatReadSchema>;
 export type CreateFileBody = z.infer<typeof CreateFileSchema>;
 export type ApproveFileBody = z.infer<typeof ApproveFileSchema>;
 export type UpdateProjectFileBody = z.infer<typeof UpdateProjectFileSchema>;
+export type CreateTaskFileMetadataBody = z.infer<typeof CreateTaskFileMetadataSchema>;
 export type BriefPatchBody = z.infer<typeof BriefPatchSchema>;
 export type CreateMinorChangeRequestBody = z.infer<typeof CreateMinorChangeRequestSchema>;
 export type CreateFormalChangeRequestBody = z.infer<typeof CreateFormalChangeRequestSchema>;
 export type ResolveChangeRequestBody = z.infer<typeof ResolveChangeRequestSchema>;
 export type CreateTaskCommentBody = z.infer<typeof CreateTaskCommentSchema>;
+export type GenerateUploadUrlBody = z.infer<typeof GenerateUploadUrlSchema>;

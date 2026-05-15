@@ -1,8 +1,8 @@
-import { db } from "../../../db/connection";
+import type { DbOrTx } from "../collab.repository";
 import { auditLogs } from "../../../db/schema";
 import type { AuditDetails } from "../collab.types";
 
-export const auditRepository = {
+export const createAuditRepository = (conn: DbOrTx) => ({
   createAuditLog: async (params: {
     actorSub: string | null;
     action: string;
@@ -12,7 +12,7 @@ export const auditRepository = {
     userAgent: string;
     details?: AuditDetails;
   }) => {
-    await db.insert(auditLogs).values({
+    await conn.insert(auditLogs).values({
       actorSub: params.actorSub,
       action: params.action,
       resourceType: params.resourceType,
@@ -22,4 +22,4 @@ export const auditRepository = {
       details: params.details ?? null,
     });
   },
-};
+});

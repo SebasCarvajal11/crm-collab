@@ -646,7 +646,6 @@ async function seed() {
           messageType: "text",
           authorSub: authorSub || adminSub,
           body: msgSeed.body,
-          mentionedSubs: [],
         });
         messagesCreated++;
       }

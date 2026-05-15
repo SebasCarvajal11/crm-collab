@@ -14,6 +14,7 @@ import {
   bigint,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 
 export const collabSchema = pgSchema("schema_collab");
 
@@ -84,7 +85,7 @@ export const fileFolderEnum = collabSchema.enum("file_folder", [
 export const projects = collabSchema.table(
   "projects",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     name: varchar("name", { length: 140 }).notNull(),
     description: text("description"),
     clientName: varchar("client_name", { length: 160 }).notNull(),
@@ -122,7 +123,7 @@ export const projectMembers = collabSchema.table(
 export const projectTaskColumns = collabSchema.table(
   "project_task_columns",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -140,7 +141,7 @@ export const projectTaskColumns = collabSchema.table(
 export const projectTasks = collabSchema.table(
   "project_tasks",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -154,10 +155,10 @@ export const projectTasks = collabSchema.table(
     reporterSub: uuid("reporter_sub").notNull(),
     deadline: timestamp("deadline", { mode: "date" }),
     checklistProgress: integer("checklist_progress").default(0).notNull(),
-    subtasks: jsonb("subtasks"),
     blockedByTaskId: uuid("blocked_by_task_id"),
     isClientVisible: boolean("is_client_visible").default(false).notNull(),
     position: integer("position").notNull(),
+    completedAt: timestamp("completed_at", { mode: "date" }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
@@ -167,10 +168,27 @@ export const projectTasks = collabSchema.table(
   ]
 );
 
+export const projectSubtasks = collabSchema.table(
+  "project_subtasks",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => projectTasks.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    isCompleted: boolean("is_completed").default(false).notNull(),
+    assigneeSub: uuid("assignee_sub"),
+    position: integer("position").default(0).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_project_subtasks_task_id").on(t.taskId)]
+);
+
 export const projectChatMessages = collabSchema.table(
   "project_chat_messages",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -179,7 +197,6 @@ export const projectChatMessages = collabSchema.table(
     authorSub: uuid("author_sub"),
     authorEmail: varchar("author_email", { length: 255 }),
     body: text("body").notNull(),
-    mentionedSubs: jsonb("mentioned_subs"),
     metadata: jsonb("metadata"),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
@@ -187,6 +204,17 @@ export const projectChatMessages = collabSchema.table(
     index("idx_project_chat_messages_project_id").on(t.projectId),
     index("idx_project_chat_messages_project_channel_created").on(t.projectId, t.channel, t.createdAt),
   ]
+);
+
+export const projectChatMentions = collabSchema.table(
+  "project_chat_mentions",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => projectChatMessages.id, { onDelete: "cascade" }),
+    userSub: uuid("user_sub").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.messageId, t.userSub] })]
 );
 
 export const projectChatMessageReads = collabSchema.table(
@@ -207,7 +235,7 @@ export const projectChatMessageReads = collabSchema.table(
 export const projectMentionNotifications = collabSchema.table(
   "project_mention_notifications",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -233,7 +261,7 @@ export const projectMentionNotifications = collabSchema.table(
 export const projectFiles = collabSchema.table(
   "project_files",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -288,7 +316,7 @@ export const projectTaskAssignees = collabSchema.table(
 export const projectTaskComments = collabSchema.table(
   "project_task_comments",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     taskId: uuid("task_id")
       .notNull()
       .references(() => projectTasks.id, { onDelete: "cascade" }),
@@ -312,7 +340,7 @@ export const projectBriefs = collabSchema.table("project_briefs", {
 export const projectChangeRequests = collabSchema.table(
   "project_change_requests",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -335,7 +363,7 @@ export const projectChangeRequests = collabSchema.table(
 export const projectBriefChangeLog = collabSchema.table(
   "project_brief_change_log",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
@@ -384,9 +412,23 @@ export const projectColumnsRelations = relations(projectTaskColumns, ({ one, man
 export const projectTasksRelations = relations(projectTasks, ({ one, many }) => ({
   project: one(projects, { fields: [projectTasks.projectId], references: [projects.id] }),
   column: one(projectTaskColumns, { fields: [projectTasks.columnId], references: [projectTaskColumns.id] }),
+  subtasks: many(projectSubtasks),
   assignees: many(projectTaskAssignees),
   comments: many(projectTaskComments),
   files: many(projectFiles),
+}));
+
+export const projectSubtasksRelations = relations(projectSubtasks, ({ one }) => ({
+  task: one(projectTasks, { fields: [projectSubtasks.taskId], references: [projectTasks.id] }),
+}));
+
+export const projectChatMessagesRelations = relations(projectChatMessages, ({ one, many }) => ({
+  project: one(projects, { fields: [projectChatMessages.projectId], references: [projects.id] }),
+  mentions: many(projectChatMentions),
+}));
+
+export const projectChatMentionsRelations = relations(projectChatMentions, ({ one }) => ({
+  message: one(projectChatMessages, { fields: [projectChatMentions.messageId], references: [projectChatMessages.id] }),
 }));
 
 export const projectTaskAssigneesRelations = relations(projectTaskAssignees, ({ one }) => ({

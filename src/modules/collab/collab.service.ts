@@ -2,8 +2,10 @@ import type { CollabRepository } from "./collab.repository";
 import type { GlobalRole, ProjectMemberRole, ProjectType } from "./collab.types";
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../shared/middlewares/error-handler.middleware";
 import { collabEvents } from "./events";
-import { ociStorage } from "../../shared/storage/oci-storage";
 import { fetchUserProfiles } from "../../shared/auth-client";
+import { getMediaDocumentAccessUrl, deleteDocumentInMedia } from "../../shared/media-client";
+import { v4 as uuidv4 } from "uuid";
+import { ociStorage } from "../../shared/storage/oci-storage";
 
 type Actor = { sub: string; role: GlobalRole; email: string };
 type RequestMeta = { ipAddress: string; userAgent: string };
@@ -16,6 +18,55 @@ const canInternalChat = (globalRole: GlobalRole, memberRole?: ProjectMemberRole)
   globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
 const canReceiveMentionInChannel = (channel: "internal" | "external", memberRole: ProjectMemberRole) =>
   channel === "internal" ? memberRole === "admin" || memberRole === "worker" : true;
+
+const FINALIZATION_COLUMN_KEYS = new Set(["done", "completed"]);
+
+const BLOCKED_EXTENSIONS = new Set([
+  ".exe", ".bat", ".cmd", ".sh", ".ps1", ".msi", ".dll", ".com",
+  ".vbs", ".js", ".ts", ".jsx", ".tsx", ".py", ".rb", ".pl", ".php",
+]);
+
+const BLOCKED_MIMES = new Set([
+  "application/x-msdownload",
+  "application/x-executable",
+  "application/x-sh",
+  "application/x-bat",
+  "text/javascript",
+  "application/javascript",
+  "application/x-php",
+]);
+
+const assertAllowedUploadMime = (mimeType: string, fileName: string) => {
+  const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
+  if (BLOCKED_EXTENSIONS.has(ext)) throw new BadRequestError("Tipo de archivo no permitido");
+  if (BLOCKED_MIMES.has(mimeType)) throw new BadRequestError("Tipo de archivo no permitido");
+};
+
+const sanitizeFileName = (input: string) => {
+  const clean = input
+    .normalize("NFKD")
+    .replace(/[^\w.\-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return clean || `file_${Date.now()}`;
+};
+
+const calculateChecklistProgress = (
+  subtasks?: { isCompleted: boolean }[] | null,
+  fallbackProgress = 0
+) => {
+  if (subtasks === undefined) return fallbackProgress;
+  if (subtasks === null) return fallbackProgress;
+  if (!subtasks.length) return 0;
+  const completed = subtasks.filter((s) => s.isCompleted).length;
+  return Math.round((completed / subtasks.length) * 100);
+};
+
+const isTaskInFinalizationColumn = (columnKey: string) => FINALIZATION_COLUMN_KEYS.has(columnKey);
+
+const isTaskCompleted = (columnKey: string, checklistProgress: number) =>
+  isTaskInFinalizationColumn(columnKey) && checklistProgress === 100;
+
 
 const allowedMentionRolesByActor = (actorRole: GlobalRole): ProjectMemberRole[] => {
   if (actorRole === "admin") return ["admin", "worker", "client"];
@@ -88,34 +139,7 @@ const assertProjectAccess = async (repo: CollabRepository, actor: Actor, project
   return { project, member };
 };
 
-const refreshParentProgress = async (repo: CollabRepository, projectId: string) => {
-  const project = await repo.findProjectById(projectId);
-  if (!project) return;
-  const agg = await repo.getProjectProgressAggregate(projectId);
-  if (!agg || !agg.total) {
-    await repo.updateProjectById(projectId, { status: "todo", progressPercent: 0 });
-    return;
-  }
-  const total = Number(agg.total ?? 0);
-  const doneCount = Number(agg.doneCount ?? 0);
-  const reviewCount = Number(agg.reviewCount ?? 0);
-  const nonPendingCount = Number(agg.nonPendingCount ?? 0);
-  const progressAvg = Number(agg.progressAvg ?? 0);
-  const isCompleted = doneCount === total;
-  const isReview = reviewCount > 0;
-  const isInProgress = nonPendingCount > 0;
-  const nextStatus: "todo" | "in_progress" | "in_review" | "completed" = isCompleted
-    ? "completed"
-    : isReview
-      ? "in_review"
-      : isInProgress
-        ? "in_progress"
-        : "todo";
-  await repo.updateProjectById(projectId, {
-    status: nextStatus,
-    progressPercent: progressAvg,
-  });
-};
+
 
 const assertWorkerOnlyAssignments = async (
   repo: CollabRepository,
@@ -202,21 +226,38 @@ export const createCollabService = (repo: CollabRepository) => ({
       clientName?: string;
     }
   ) => {
-    await repo.syncAllProjectsStatusAndProgress();
-    const rows = await repo.listProjectsForUser({
+    const { rows, total } = await repo.listProjectsForUser({
       userSub: actor.sub,
       isAdminGlobal: actor.role === "admin",
       type: query.type,
       status: query.status,
       adminResponsibleSub: query.adminSub,
+      clientName: query.clientName,
       limit: query.limit,
       offset: (query.page - 1) * query.limit,
     });
-    if (query.clientName) {
-      const needle = query.clientName.trim().toLowerCase();
-      return rows.filter((p) => p.clientName.toLowerCase().includes(needle));
-    }
-    return rows;
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+
+    return {
+      items: rows,
+      page: query.page,
+      limit: query.limit,
+      total,
+      total_pages: totalPages,
+    };
+  },
+
+  searchProjects: async (
+    actor: Actor,
+    query: { q: string; limit: number }
+  ) => {
+    return repo.searchProjectsForUser({
+      userSub: actor.sub,
+      role: actor.role,
+      q: query.q,
+      limit: query.limit,
+    });
   },
 
   createProject: async (
@@ -234,49 +275,53 @@ export const createCollabService = (repo: CollabRepository) => ({
     meta: RequestMeta
   ) => {
     if (actor.role !== "admin") throw new ForbiddenError("Solo admin puede crear proyectos");
-    const project = await repo.createProject({
-      name: payload.name,
-      description: payload.description,
-      clientName: payload.clientName,
-      clientSub: payload.clientSub ?? null,
-      type: payload.type,
-      adminResponsibleSub: actor.sub,
-      estimatedDueDate: payload.estimatedDueDate ?? null,
-      status: "todo",
-      progressPercent: 0,
-    });
-    await repo.createProjectMember({
-      projectId: project.id,
-      userSub: actor.sub,
-      role: "admin",
-      userEmail: actor.email,
-    });
-    const uniqueWorkerSubs = [...new Set(payload.workerSubs)].filter((sub) => sub !== actor.sub && sub !== payload.clientSub);
-    for (const workerSub of uniqueWorkerSubs) {
-      await repo.upsertProjectMember({ projectId: project.id, userSub: workerSub, role: "worker", userEmail: null });
-    }
-    if (payload.clientSub) {
-      await repo.upsertProjectMember({ projectId: project.id, userSub: payload.clientSub, role: "client", userEmail: null });
-    }
-    for (const c of defaultColumnsByType(payload.type)) {
-      await repo.createTaskColumn({
-        projectId: project.id,
-        key: c.key as never,
-        title: c.title,
-        position: c.position,
-        isClientVisible: c.isClientVisible,
-        isDefault: true,
+    
+    const project = await repo.transaction(async (txRepo) => {
+      const project = await txRepo.createProject({
+        name: payload.name,
+        description: payload.description,
+        clientName: payload.clientName,
+        clientSub: payload.clientSub ?? null,
+        type: payload.type,
+        adminResponsibleSub: actor.sub,
+        estimatedDueDate: payload.estimatedDueDate ?? null,
+        status: "todo",
+        progressPercent: 0,
       });
-    }
-    await repo.createBrief({ projectId: project.id, content: payload.brief, updatedBySub: actor.sub });
-    await repo.createAuditLog({
-      actorSub: actor.sub,
-      action: "project_created",
-      resourceType: "project",
-      resourceId: project.id,
-      ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent,
-      details: { type: project.type, client: project.clientName },
+      await txRepo.createProjectMember({
+        projectId: project.id,
+        userSub: actor.sub,
+        role: "admin",
+        userEmail: actor.email,
+      });
+      const uniqueWorkerSubs = [...new Set(payload.workerSubs)].filter((sub) => sub !== actor.sub && sub !== payload.clientSub);
+      for (const workerSub of uniqueWorkerSubs) {
+        await txRepo.upsertProjectMember({ projectId: project.id, userSub: workerSub, role: "worker", userEmail: null });
+      }
+      if (payload.clientSub) {
+        await txRepo.upsertProjectMember({ projectId: project.id, userSub: payload.clientSub, role: "client", userEmail: null });
+      }
+      for (const c of defaultColumnsByType(payload.type)) {
+        await txRepo.createTaskColumn({
+          projectId: project.id,
+          key: c.key as never,
+          title: c.title,
+          position: c.position,
+          isClientVisible: c.isClientVisible,
+          isDefault: true,
+        });
+      }
+      await txRepo.createBrief({ projectId: project.id, content: payload.brief, updatedBySub: actor.sub });
+      await txRepo.createAuditLog({
+        actorSub: actor.sub,
+        action: "project_created",
+        resourceType: "project",
+        resourceId: project.id,
+        ipAddress: meta.ipAddress,
+        userAgent: meta.userAgent,
+        details: { type: project.type, client: project.clientName },
+      });
+      return project;
     });
 
     // Emit event
@@ -332,17 +377,17 @@ export const createCollabService = (repo: CollabRepository) => ({
     const [members, columns, tasks, brief, formalChanges, assignees] = await Promise.all([
       repo.listProjectMembers(projectId),
       repo.listTaskColumnsByProject(projectId),
-      repo.listTasksByProject(projectId),
+      repo.listTasksByProject({ projectId, limit: 1000, offset: 0 }),
       repo.getBriefByProject(projectId),
       repo.listChangeRequestsByProject(projectId, "formal"),
       repo.listTaskAssigneesByProject(projectId),
     ]);
 
-    const enrichedMembers = await enrichProjectMembersWithProfiles(members, actor, assignees, tasks);
+    const enrichedMembers = await enrichProjectMembersWithProfiles(members, actor, assignees, tasks.rows);
 
     const isClient = actor.role === "client";
-    const visibleColumns = isClient ? columns.filter((c) => c.isClientVisible) : columns;
-    const visibleTasks = isClient ? tasks.filter((t) => t.isClientVisible) : tasks;
+    const visibleColumns = isClient ? columns.filter((c: any) => c.isClientVisible) : columns;
+    const visibleTasks = isClient ? tasks.rows.filter((t: any) => t.isClientVisible) : tasks.rows;
 
     return { project, members: enrichedMembers, board: { columns: visibleColumns, tasks: visibleTasks }, brief, formalChanges };
   },
@@ -353,11 +398,11 @@ export const createCollabService = (repo: CollabRepository) => ({
     const [members, columns, tasks, assignees] = await Promise.all([
       repo.listProjectMembers(projectId),
       repo.listTaskColumnsByProject(projectId),
-      repo.listTasksByProject(projectId),
+      repo.listTasksByProject({ projectId, limit: 2000, offset: 0 }),
       repo.listTaskAssigneesByProject(projectId),
     ]);
 
-    const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks);
+    const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks.rows);
 
     const lightweightMembers = members.map((member) => ({
       ...member,
@@ -372,7 +417,7 @@ export const createCollabService = (repo: CollabRepository) => ({
 
     const isClient = actor.role === "client";
     const visibleColumns = isClient ? columns.filter((c) => c.isClientVisible) : columns;
-    const visibleTasks = isClient ? tasks.filter((t) => t.isClientVisible) : tasks;
+    const visibleTasks = isClient ? tasks.rows.filter((t) => t.isClientVisible) : tasks.rows;
 
     return { project, members: lightweightMembers, board: { columns: visibleColumns, tasks: visibleTasks } };
   },
@@ -408,9 +453,9 @@ export const createCollabService = (repo: CollabRepository) => ({
     const [members, assignees, tasks] = await Promise.all([
       repo.listProjectMembers(projectId),
       repo.listTaskAssigneesByProject(projectId),
-      repo.listTasksByProject(projectId),
+      repo.listTasksByProject({ projectId, limit: 2000, offset: 0 }),
     ]);
-    return enrichProjectMembersWithProfiles(members, actor, assignees, tasks);
+    return enrichProjectMembersWithProfiles(members, actor, assignees, tasks.rows);
   },
 
   createTaskColumn: async (
@@ -500,11 +545,8 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
     const primaryAssigneeSub = payload.assignees?.[0]?.userSub ?? null;
 
-    let calculatedProgress = payload.checklistProgress;
-    if (payload.subtasks && payload.subtasks.length > 0) {
-      const completed = payload.subtasks.filter((s) => s.isCompleted).length;
-      calculatedProgress = Math.round((completed / payload.subtasks.length) * 100);
-    }
+    const calculatedProgress = calculateChecklistProgress(payload.subtasks, payload.checklistProgress);
+    const completedAt = isTaskCompleted(column.key, calculatedProgress) ? new Date() : null;
 
     const task = await repo.createTask({
       projectId,
@@ -516,15 +558,18 @@ export const createCollabService = (repo: CollabRepository) => ({
       reporterSub: actor.sub,
       deadline: payload.dueDate ?? null,
       checklistProgress: calculatedProgress,
-      subtasks: payload.subtasks ?? [],
       blockedByTaskId: payload.blockedByTaskId ?? null,
       isClientVisible: payload.clientVisible,
       position: payload.position,
+      completedAt,
     });
+    if (payload.subtasks?.length) {
+      await repo.upsertSubtasks(task.id, payload.subtasks);
+    }
     if (payload.assignees?.length) {
       await repo.upsertTaskAssignees(task.id, payload.assignees);
     }
-    await refreshParentProgress(repo, projectId);
+    await repo.syncProjectStatusAndProgress(projectId);
     await repo.createAuditLog({
       actorSub: actor.sub,
       action: "project_task_created",
@@ -536,10 +581,25 @@ export const createCollabService = (repo: CollabRepository) => ({
     return task;
   },
 
-  listTasksByProject: async (actor: Actor, projectId: string) => {
+  listTasksByProject: async (actor: Actor, projectId: string, query: { page: number; limit: number; columnId?: string }) => {
     await assertProjectAccess(repo, actor, projectId);
-    const tasks = await repo.listTasksByProject(projectId);
-    return actor.role === "client" ? tasks.filter((t) => t.isClientVisible) : tasks;
+    const { rows, total } = await repo.listTasksByProject({
+      projectId,
+      limit: query.limit,
+      offset: (query.page - 1) * query.limit,
+      columnId: query.columnId,
+      isClientVisible: actor.role === "client" ? true : undefined,
+    });
+    
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+
+    return {
+      items: rows,
+      page: query.page,
+      limit: query.limit,
+      total,
+      total_pages: totalPages,
+    };
   },
 
   updateTask: async (
@@ -570,24 +630,31 @@ export const createCollabService = (repo: CollabRepository) => ({
         subtasks: patch.subtasks,
       });
     }
-    if (patch.columnId) {
-      const column = await repo.findTaskColumnById(patch.columnId);
-      if (!column || column.projectId !== task.projectId) throw new BadRequestError("Columna destino inválida");
-      if (actor.role === "client") throw new ForbiddenError("Cliente no puede mover tareas");
-    }
+    if (actor.role === "client" && patch.columnId) throw new ForbiddenError("Cliente no puede mover tareas");
+
     const primaryAssigneeSub = patch.assignees !== undefined
       ? (patch.assignees[0]?.userSub ?? null)
       : undefined;
-
-    let calculatedProgress = patch.checklistProgress;
-    if (patch.subtasks !== undefined) {
-      if (patch.subtasks.length > 0) {
-        const completed = patch.subtasks.filter((s) => s.isCompleted).length;
-        calculatedProgress = Math.round((completed / patch.subtasks.length) * 100);
-      } else {
-        calculatedProgress = 0;
-      }
+    const currentColumn = await repo.findTaskColumnById(task.columnId);
+    if (!currentColumn || currentColumn.projectId !== task.projectId) {
+      throw new NotFoundError("Columna actual de la tarea no encontrada");
     }
+    const targetColumn = patch.columnId ? await repo.findTaskColumnById(patch.columnId) : currentColumn;
+    if (!targetColumn || targetColumn.projectId !== task.projectId) {
+      throw new BadRequestError("Columna destino invalida");
+    }
+
+    const calculatedProgress = calculateChecklistProgress(
+      patch.subtasks,
+      patch.checklistProgress ?? task.checklistProgress
+    );
+    const effectiveSubtasks = patch.subtasks ?? ((task.subtasks as { isCompleted: boolean }[] | null) ?? []);
+    if (isTaskInFinalizationColumn(targetColumn.key) && effectiveSubtasks.length > 0 && calculatedProgress < 100) {
+      throw new BadRequestError("No puedes mover la tarea a la columna final sin completar todas las subtareas");
+    }
+    const completedAt = isTaskCompleted(targetColumn.key, calculatedProgress)
+      ? task.completedAt ?? new Date()
+      : null;
 
     const updated = await repo.updateTaskById(taskId, {
       columnId: patch.columnId,
@@ -597,16 +664,19 @@ export const createCollabService = (repo: CollabRepository) => ({
       assigneeSub: primaryAssigneeSub,
       deadline: patch.dueDate,
       checklistProgress: calculatedProgress,
-      subtasks: patch.subtasks,
       blockedByTaskId: patch.blockedByTaskId,
       isClientVisible: patch.clientVisible,
       position: patch.position,
+      completedAt,
     });
     if (!updated) throw new NotFoundError("Tarea no encontrada");
+    if (patch.subtasks !== undefined) {
+      await repo.upsertSubtasks(taskId, patch.subtasks);
+    }
     if (patch.assignees !== undefined) {
       await repo.upsertTaskAssignees(taskId, patch.assignees);
     }
-    await refreshParentProgress(repo, task.projectId);
+    await repo.syncProjectStatusAndProgress(task.projectId);
     await repo.createAuditLog({
       actorSub: actor.sub,
       action: "project_task_updated",
@@ -616,22 +686,16 @@ export const createCollabService = (repo: CollabRepository) => ({
       userAgent: meta.userAgent,
     });
 
-    // Emit task moved event if column changed
     if (patch.columnId && patch.columnId !== task.columnId) {
-      const oldColumn = await repo.findTaskColumnById(task.columnId);
-      const newColumn = await repo.findTaskColumnById(patch.columnId);
-      if (oldColumn && newColumn) {
-        await collabEvents.emit("task.moved", task.projectId, actor.sub, {
-          taskId: task.id,
-          taskTitle: updated.title,
-          fromColumnKey: oldColumn.key,
-          toColumnKey: newColumn.key,
-          assigneeSub: updated.assigneeSub ?? undefined,
-        });
-      }
+      await collabEvents.emit("task.moved", task.projectId, actor.sub, {
+        taskId: task.id,
+        taskTitle: updated.title,
+        fromColumnKey: currentColumn.key,
+        toColumnKey: targetColumn.key,
+        assigneeSub: updated.assigneeSub ?? undefined,
+      });
     }
 
-    // Emit task assigned event if assignees changed
     if (patch.assignees !== undefined) {
       const newPrimary = patch.assignees[0]?.userSub;
       if (newPrimary && newPrimary !== task.assigneeSub) {
@@ -647,16 +711,25 @@ export const createCollabService = (repo: CollabRepository) => ({
     return updated;
   },
 
-  listChatMessages: async (actor: Actor, projectId: string, channel: "internal" | "external") => {
+  listChatMessages: async (
+    actor: Actor,
+    projectId: string,
+    channel: "internal" | "external",
+    query: { page: number; limit: number }
+  ) => {
     const { member } = await assertProjectAccess(repo, actor, projectId);
     await repo.touchProjectMemberActivity(projectId, actor.sub);
     if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
       throw new ForbiddenError("No tienes acceso al chat interno");
     }
-    const [messages, members] = await Promise.all([
-      repo.listChatMessagesByChannel(projectId, channel),
-      repo.listProjectMembers(projectId),
-    ]);
+    const { rows: messages, total } = await repo.listChatMessagesByChannel({
+      projectId,
+      channel,
+      limit: query.limit,
+      offset: (query.page - 1) * query.limit,
+    });
+
+    const members = await repo.listProjectMembers(projectId);
     const reads = await repo.listChatReadsByMessages(messages.map((m) => m.id));
     const readersByMessage = new Map<string, Set<string>>();
     for (const read of reads) {
@@ -666,7 +739,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     const memberSubs = new Set(members.map((m) => m.userSub));
     const memberBySub = new Map(members.map((m) => [m.userSub, m]));
 
-    return messages.map((msg) => {
+    const items = messages.map((msg) => {
       const readers = readersByMessage.get(msg.id) ?? new Set<string>();
       const mentioned = ((msg.mentionedSubs ?? []) as string[]).filter((sub) => memberSubs.has(sub));
       const authorMember = msg.authorSub ? memberBySub.get(msg.authorSub) : undefined;
@@ -688,6 +761,16 @@ export const createCollabService = (repo: CollabRepository) => ({
         },
       };
     });
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+
+    return {
+      items,
+      page: query.page,
+      limit: query.limit,
+      total,
+      total_pages: totalPages,
+    };
   },
 
   postChatMessage: async (
@@ -727,8 +810,10 @@ export const createCollabService = (repo: CollabRepository) => ({
       authorSub: actor.sub,
       authorEmail: actor.email,
       body,
-      mentionedSubs: mentionSubs,
     });
+    if (mentionSubs.length > 0) {
+      await repo.createChatMentions(row.id, mentionSubs);
+    }
     if (mentionSubs.length > 0) {
       const preview = body.trim().slice(0, 240);
       await repo.createMentionNotifications(
@@ -797,7 +882,12 @@ export const createCollabService = (repo: CollabRepository) => ({
       }
     }
     if (payload.messageIds.length > 0) {
-      const messages = await repo.listChatMessagesByChannel(projectId, channel);
+      const { rows: messages } = await repo.listChatMessagesByChannel({
+        projectId,
+        channel,
+        limit: 1000,
+        offset: 0,
+      });
       const idsInChannel = new Set(messages.map((m) => m.id));
       for (const id of payload.messageIds) {
         if (idsInChannel.has(id)) rowsToMark.push(id);
@@ -1016,14 +1106,43 @@ export const createCollabService = (repo: CollabRepository) => ({
     return updated;
   },
 
-  listFormalChangeLog: async (actor: Actor, projectId: string) => {
+  listFormalChangeLog: async (actor: Actor, projectId: string, query: { page: number; limit: number }) => {
     await assertProjectAccess(repo, actor, projectId);
-    return repo.listBriefChangeLog(projectId);
+    const { rows, total } = await repo.listBriefChangeLog({
+      projectId,
+      limit: query.limit,
+      offset: (query.page - 1) * query.limit,
+    });
+    
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+
+    return {
+      items: rows,
+      page: query.page,
+      limit: query.limit,
+      total,
+      total_pages: totalPages,
+    };
   },
 
-  listFiles: async (actor: Actor, projectId: string) => {
+  listFiles: async (actor: Actor, projectId: string, query: { page: number; limit: number }) => {
     await assertProjectAccess(repo, actor, projectId);
-    return repo.listFilesByProject(projectId, actor.role === "client");
+    const { rows, total } = await repo.listFilesWithTaskInfo({
+      projectId,
+      isClientView: actor.role === "client",
+      limit: query.limit,
+      offset: (query.page - 1) * query.limit,
+    });
+
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+
+    return {
+      items: rows,
+      page: query.page,
+      limit: query.limit,
+      total,
+      total_pages: totalPages,
+    };
   },
 
   uploadFileMetadata: async (
@@ -1031,6 +1150,8 @@ export const createCollabService = (repo: CollabRepository) => ({
     projectId: string,
     payload: {
       fileName: string;
+      title?: string;
+      description?: string | null;
       storagePath: string;
       mimeType: string;
       sizeBytes: number;
@@ -1050,6 +1171,8 @@ export const createCollabService = (repo: CollabRepository) => ({
     const latest = await repo.findLatestVersion(projectId, payload.fileName);
     const row = await repo.createFile({
       projectId,
+      title: payload.title ?? null,
+      description: payload.description ?? null,
       origin: payload.origin,
       folder: payload.folder,
       fileName: payload.fileName,
@@ -1060,6 +1183,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       isActive: true,
       isClientVisible: payload.isClientVisible,
       createdBySub: actor.sub,
+      createdByEmail: actor.email,
     });
     await repo.createAuditLog({
       actorSub: actor.sub,
@@ -1189,7 +1313,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     return repo.listTaskFiles(taskId);
   },
 
-  uploadTaskFile: async (
+  uploadTaskFileMetadata: async (
     actor: Actor,
     projectId: string,
     taskId: string,
@@ -1197,15 +1321,15 @@ export const createCollabService = (repo: CollabRepository) => ({
       title: string;
       description: string;
       fileName: string;
+      storagePath: string;
       mimeType: string;
       sizeBytes: number;
-      fileBuffer: Buffer;
       isClientVisible: boolean;
       authorEmail: string;
     },
     meta: RequestMeta
   ) => {
-    const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
+    const MAX_BYTES = 25 * 1024 * 1024;
     if (payload.sizeBytes > MAX_BYTES) throw new BadRequestError("El archivo supera el límite de 25 MB");
     const { member } = await assertProjectAccess(repo, actor, projectId);
     const task = await repo.findTaskById(taskId);
@@ -1213,8 +1337,6 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (actor.role === "client" && !canInternalChat(actor.role, member?.role)) {
       if (!task.isClientVisible) throw new ForbiddenError("No tienes acceso a esta tarea");
     }
-    const storagePath = `projects/${projectId}/tasks/${taskId}/${payload.fileName}`;
-    await ociStorage.uploadObject(storagePath, payload.fileBuffer, payload.mimeType);
     const file = await repo.createFileForTask({
       projectId,
       taskId,
@@ -1223,7 +1345,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       origin: "manual_upload",
       folder: "shared_deliverables",
       fileName: payload.fileName,
-      storagePath,
+      storagePath: payload.storagePath,
       mimeType: payload.mimeType,
       sizeBytes: payload.sizeBytes,
       isClientVisible: payload.isClientVisible,
@@ -1245,87 +1367,31 @@ export const createCollabService = (repo: CollabRepository) => ({
     return file;
   },
 
-  uploadProjectFile: async (
-    actor: Actor,
-    projectId: string,
-    payload: {
-      taskId: string | null;
-      title: string;
-      description: string | null;
-      fileName: string;
-      mimeType: string;
-      sizeBytes: number;
-      fileBuffer: Buffer;
-      isClientVisible: boolean;
-      channel: "internal" | "external";
-      authorEmail: string;
-    },
-    meta: RequestMeta
-  ) => {
-    const MAX_BYTES = 25 * 1024 * 1024;
-    if (payload.sizeBytes > MAX_BYTES) throw new BadRequestError("El archivo supera el limite de 25 MB");
-    const { member } = await assertProjectAccess(repo, actor, projectId);
-
-    if (payload.channel === "internal" && !canInternalChat(actor.role, member?.role)) {
-      throw new ForbiddenError("No tienes acceso al canal interno");
-    }
-
-    let taskId: string | null = null;
-    if (payload.taskId) {
-      const task = await repo.findTaskById(payload.taskId);
-      if (!task || task.projectId !== projectId) throw new BadRequestError("La tarea no pertenece al proyecto");
-      taskId = task.id;
-    }
-
-    const storagePath = taskId
-      ? `projects/${projectId}/tasks/${taskId}/${payload.fileName}`
-      : `projects/${projectId}/files/${payload.fileName}`;
-
-    await ociStorage.uploadObject(storagePath, payload.fileBuffer, payload.mimeType);
-
-    const file = await repo.createFileForTask({
-      projectId,
-      taskId,
-      title: payload.title,
-      description: payload.description,
-      origin: payload.channel === "internal" ? "internal_chat" : "external_chat",
-      folder: "shared_deliverables",
-      fileName: payload.fileName,
-      storagePath,
-      mimeType: payload.mimeType,
-      sizeBytes: payload.sizeBytes,
-      isClientVisible: payload.isClientVisible,
-      isActive: true,
-      approvedByClient: false,
-      version: 1,
-      createdBySub: actor.sub,
-      createdByEmail: payload.authorEmail,
-    });
-
-    await repo.createAuditLog({
-      actorSub: actor.sub,
-      action: "project_file_uploaded_from_conversation",
-      resourceType: "project_file",
-      resourceId: file.id,
-      ipAddress: meta.ipAddress,
-      userAgent: meta.userAgent,
-      details: { taskId, channel: payload.channel, fileName: payload.fileName, sizeBytes: payload.sizeBytes },
-    });
-
-    return file;
-  },
 
   listFilesWithTaskInfo: async (actor: Actor, projectId: string) => {
     await assertProjectAccess(repo, actor, projectId);
-    return repo.listFilesWithTaskInfo(projectId, actor.role === "client");
+    return repo.listFilesWithTaskInfo({
+      projectId,
+      isClientView: actor.role === "client",
+      limit: 1000,
+      offset: 0,
+    });
   },
 
-  downloadTaskFile: async (actor: Actor, fileId: string) => {
+  listProjectTimeline: async (actor: Actor, projectId: string) => {
+    await assertProjectAccess(repo, actor, projectId);
+    return repo.listProjectTimeline(projectId, actor.role === "client");
+  },
+
+  getFileAccess: async (actor: Actor, fileId: string, forceDownload: boolean) => {
     const file = await repo.findFileById(fileId);
     if (!file) throw new NotFoundError("Archivo no encontrado");
     await assertProjectAccess(repo, actor, file.projectId);
-    const result = await ociStorage.downloadObject(file.storagePath);
-    return { file, stream: result.Body! };
+    if (actor.role === "client" && !file.isClientVisible) {
+      throw new ForbiddenError("No tienes permiso para descargar este archivo");
+    }
+    const access = await getMediaDocumentAccessUrl(actor, file.storagePath, forceDownload);
+    return { file, ...access };
   },
 
   deleteFile: async (actor: Actor, fileId: string, meta: RequestMeta) => {
@@ -1335,7 +1401,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (actor.role !== "admin" && file.createdBySub !== actor.sub) {
       throw new ForbiddenError("Solo el creador o un admin puede eliminar el archivo");
     }
-    await ociStorage.deleteObject(file.storagePath);
+    await deleteDocumentInMedia(actor, file.storagePath);
     await repo.deleteFileById(fileId);
     await repo.createAuditLog({
       actorSub: actor.sub,
@@ -1385,6 +1451,48 @@ export const createCollabService = (repo: CollabRepository) => ({
       details: { taskId: taskId ?? null },
     });
     return updated;
+  },
+
+  // ─── Pre-Signed URL Upload Flow ─────────────────────────────────────────────
+
+  /**
+   * Genera una URL prefirmada de escritura OCI para archivos de proyecto.
+   * El frontend sube directamente a OCI; luego llama POST /projects/:id/files
+   * (uploadFileMetadata) para registrar el archivo en DB.
+   */
+  generateProjectFileUploadUrl: async (
+    actor: Actor,
+    projectId: string,
+    payload: { fileName: string; mimeType: string; sizeBytes: number }
+  ) => {
+    await assertProjectAccess(repo, actor, projectId);
+    assertAllowedUploadMime(payload.mimeType, payload.fileName);
+    const key = `projects/${projectId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
+    const uploadUrl = await ociStorage.createPresignedUploadUrl(key, payload.mimeType, 300);
+    return { uploadUrl, objectKey: key, expiresInSeconds: 300 };
+  },
+
+  /**
+   * Genera una URL prefirmada de escritura OCI para archivos de tarea.
+   * El frontend sube directamente a OCI; luego llama
+   * POST /projects/:id/tasks/:taskId/files/metadata para registrar en DB.
+   */
+  generateTaskFileUploadUrl: async (
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    payload: { fileName: string; mimeType: string; sizeBytes: number }
+  ) => {
+    const { member } = await assertProjectAccess(repo, actor, projectId);
+    const task = await repo.findTaskById(taskId);
+    if (!task || task.projectId !== projectId) throw new NotFoundError("Tarea no encontrada");
+    if (actor.role === "client" && !canInternalChat(actor.role, member?.role)) {
+      if (!task.isClientVisible) throw new ForbiddenError("No tienes acceso a esta tarea");
+    }
+    assertAllowedUploadMime(payload.mimeType, payload.fileName);
+    const key = `projects/${projectId}/tasks/${taskId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
+    const uploadUrl = await ociStorage.createPresignedUploadUrl(key, payload.mimeType, 300);
+    return { uploadUrl, objectKey: key, expiresInSeconds: 300 };
   },
 });
 

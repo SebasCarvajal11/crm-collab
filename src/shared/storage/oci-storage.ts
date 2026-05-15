@@ -1,4 +1,11 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../../config/env";
 
 const endpoint = `https://${env.OCI_NAMESPACE}.compat.objectstorage.${env.OCI_REGION}.oraclecloud.com`;
@@ -44,5 +51,35 @@ export const ociStorage = {
         Key: key,
       })
     );
+  },
+
+  /**
+   * Genera una URL prefirmada de escritura (PUT) para que el frontend suba
+   * el archivo directamente a OCI sin pasar por el servidor Node.js.
+   */
+  createPresignedUploadUrl: async (
+    key: string,
+    mimeType: string,
+    ttlSeconds = 300
+  ): Promise<string> => {
+    const command = new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ContentType: mimeType,
+    });
+    return getSignedUrl(s3, command, { expiresIn: ttlSeconds });
+  },
+
+  /**
+   * Verifica que un objeto existe en OCI (HeadObject).
+   * Retorna true si existe, false si no fue encontrado.
+   */
+  headObject: async (key: string): Promise<boolean> => {
+    try {
+      await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+      return true;
+    } catch {
+      return false;
+    }
   },
 };

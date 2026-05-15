@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { authMiddleware, type AppEnv } from "../../shared/middlewares/auth.middleware";
-import { collabRepository } from "./collab.repository";
+import { createCollabRepository } from "./collab.repository";
 import { createCollabService } from "./collab.service";
 import { createCollabController } from "./collab.controller";
 import {
@@ -19,8 +19,10 @@ import {
   CreateProjectSchema,
   CreateTaskSchema,
   CreateTaskCommentSchema,
+  CreateTaskFileMetadataSchema,
   FileIdParamSchema,
   ProjectFiltersQuerySchema,
+  ProjectSearchQuerySchema,
   ProjectIdParamSchema,
   ProjectTaskIdParamSchema,
   ResolveChangeRequestSchema,
@@ -30,9 +32,10 @@ import {
   UpdateProjectSchema,
   UpdateTaskSchema,
   UpsertProjectMemberSchema,
+  GenerateUploadUrlSchema,
 } from "./collab.schemas";
 
-const collabService = createCollabService(collabRepository);
+const collabService = createCollabService(createCollabRepository());
 const collabController = createCollabController(collabService);
 
 export const collabRoutes = new Hono<AppEnv>();
@@ -40,6 +43,7 @@ export const collabRoutes = new Hono<AppEnv>();
 collabRoutes.use("*", authMiddleware);
 
 collabRoutes.get("/projects", zValidator("query", ProjectFiltersQuerySchema), collabController.listProjects);
+collabRoutes.get("/projects/search", zValidator("query", ProjectSearchQuerySchema), collabController.searchProjects);
 collabRoutes.post("/projects", zValidator("json", CreateProjectSchema), collabController.createProject);
 collabRoutes.patch(
   "/projects/:projectId",
@@ -176,6 +180,11 @@ collabRoutes.get(
   collabController.listFilesWithTaskInfo
 );
 collabRoutes.get(
+  "/projects/:projectId/timeline",
+  zValidator("param", ProjectIdParamSchema),
+  collabController.listProjectTimeline
+);
+collabRoutes.get(
   "/projects/:projectId/files/timeline",
   zValidator("param", ProjectIdParamSchema),
   collabController.listFilesTimeline
@@ -186,10 +195,18 @@ collabRoutes.post(
   zValidator("json", CreateFileSchema),
   collabController.uploadFileMetadata
 );
+/**
+ * POST /projects/:projectId/files/upload-url
+ * Paso 1 del flujo pre-signed: genera URL de escritura OCI para archivos de proyecto.
+ * Body JSON: { file_name, mime_type, size_bytes }
+ * Response: { data: { uploadUrl, objectKey, expiresInSeconds } }
+ * El frontend luego hace PUT uploadUrl y llama POST /projects/:id/files con el objectKey.
+ */
 collabRoutes.post(
-  "/projects/:projectId/files/upload",
+  "/projects/:projectId/files/upload-url",
   zValidator("param", ProjectIdParamSchema),
-  collabController.uploadProjectFile
+  zValidator("json", GenerateUploadUrlSchema),
+  collabController.generateProjectFileUploadUrl
 );
 collabRoutes.patch(
   "/files/:fileId/approve",
@@ -202,6 +219,11 @@ collabRoutes.get(
   "/files/:fileId/download",
   zValidator("param", FileIdParamSchema),
   collabController.downloadFile
+);
+collabRoutes.get(
+  "/files/:fileId/access",
+  zValidator("param", FileIdParamSchema),
+  collabController.getFileAccess
 );
 /** Elimina archivo de OCI + DB */
 collabRoutes.delete(
@@ -229,11 +251,25 @@ collabRoutes.post(
   collabController.createTaskComment
 );
 
-/** Archivos de tarea (multipart upload) */
+/** Archivos de tarea */
+/**
+ * POST /projects/:projectId/tasks/:taskId/files/upload-url
+ * Paso 1 del flujo pre-signed: genera URL de escritura OCI para archivos de tarea.
+ * Body JSON: { file_name, mime_type, size_bytes }
+ * Response: { data: { uploadUrl, objectKey, expiresInSeconds } }
+ * El frontend luego hace PUT uploadUrl y llama POST .../files/metadata con el objectKey.
+ */
 collabRoutes.post(
-  "/projects/:projectId/tasks/:taskId/files",
+  "/projects/:projectId/tasks/:taskId/files/upload-url",
   zValidator("param", ProjectTaskIdParamSchema),
-  collabController.uploadTaskFile   // parsea multipart internamente
+  zValidator("json", GenerateUploadUrlSchema),
+  collabController.generateTaskFileUploadUrl
+);
+collabRoutes.post(
+  "/projects/:projectId/tasks/:taskId/files/metadata",
+  zValidator("param", ProjectTaskIdParamSchema),
+  zValidator("json", CreateTaskFileMetadataSchema),
+  collabController.uploadTaskFileMetadata
 );
 collabRoutes.get(
   "/projects/:projectId/tasks/:taskId/files",
