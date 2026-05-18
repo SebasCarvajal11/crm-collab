@@ -33,7 +33,7 @@ OpenAPI: `http://localhost:3001/openapi.yaml`
 
 ## Environment
 
-Start from [.env.example](D:\BACKUP CELULAR OLIMPO\crm-collab\.env.example).
+Start from [`./.env.example`](./.env.example).
 
 Required runtime areas:
 
@@ -48,7 +48,7 @@ Required runtime areas:
 
 ## Contract and Verification
 
-- OpenAPI source: [openapi/openapi.yaml](D:\BACKUP CELULAR OLIMPO\crm-collab\openapi\openapi.yaml)
+- OpenAPI source: [`./openapi/openapi.yaml`](./openapi/openapi.yaml)
 - Gateway smoke test: `tests/01_gateway_rbac_collab.hurl`
 
 For realistic validation, point the isolated gateway at this repo plus `crm-auth` and `crm-media`, then run the smoke command against that gateway.
