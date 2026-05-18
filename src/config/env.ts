@@ -56,7 +56,7 @@ const envSchema = z
       if (PLACEHOLDER_PATTERN.test(v)) {
         ctx.addIssue({
           code: "custom",
-          message: `${path} no puede ser un valor de ejemplo; usa la configuracion real de OCI y consulta la guia segura en mod-media/Info OCI Oracle/README.md.`,
+          message: `${path} no puede ser un valor de ejemplo; usa la configuracion real de OCI y toma crm-media/README.md y crm-media/oci.config.example solo como referencia segura.`,
           path: [path],
         });
       }
@@ -65,7 +65,7 @@ const envSchema = z
     if (data.OCI_CONFIG_FILE_PATH.includes("TODO")) {
       ctx.addIssue({
         code: "custom",
-        message: "OCI_CONFIG_FILE_PATH debe apuntar a un archivo OCI config real y local antes de arrancar mod-collab.",
+        message: "OCI_CONFIG_FILE_PATH debe apuntar a un archivo OCI config real y local antes de arrancar crm-collab.",
         path: ["OCI_CONFIG_FILE_PATH"],
       });
     }

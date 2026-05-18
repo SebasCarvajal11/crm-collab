@@ -9,7 +9,7 @@
 #   TEST_SUFFIX
 # ============================================================
 
-POST http://localhost:18080/auth/login
+POST {{base_url}}/auth/login
 X-Forwarded-For: {{LOGIN_IP}}
 X-Real-IP: {{LOGIN_IP}}
 Content-Type: application/json
@@ -21,7 +21,7 @@ HTTP 200
 [Captures]
 admin_token: jsonpath "$.data.access_token"
 
-POST http://localhost:18080/auth/login
+POST {{base_url}}/auth/login
 X-Forwarded-For: {{LOGIN_IP}}
 X-Real-IP: {{LOGIN_IP}}
 Content-Type: application/json
@@ -34,7 +34,7 @@ HTTP 200
 worker_token: jsonpath "$.data.access_token"
 worker_subject: jsonpath "$.data.user.id"
 
-POST http://localhost:18080/auth/login
+POST {{base_url}}/auth/login
 X-Forwarded-For: {{LOGIN_IP}}
 X-Real-IP: {{LOGIN_IP}}
 Content-Type: application/json
@@ -47,10 +47,10 @@ HTTP 200
 client_token: jsonpath "$.data.access_token"
 client_subject: jsonpath "$.data.user.id"
 
-GET http://localhost:18080/projects
+GET {{base_url}}/projects
 HTTP 401
 
-POST http://localhost:18080/projects
+POST {{base_url}}/projects
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
@@ -64,7 +64,7 @@ Content-Type: application/json
 }
 HTTP 403
 
-POST http://localhost:18080/projects
+POST {{base_url}}/projects
 Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 {
@@ -80,13 +80,13 @@ HTTP 201
 [Captures]
 project_id: jsonpath "$.data.id"
 
-GET http://localhost:18080/projects/{{project_id}}/workspace
+GET {{base_url}}/projects/{{project_id}}/workspace
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Captures]
 column_id: jsonpath "$.data.board.columns[0].id"
 
-POST http://localhost:18080/projects/{{project_id}}/tasks
+POST {{base_url}}/projects/{{project_id}}/tasks
 Authorization: Bearer {{worker_token}}
 Content-Type: application/json
 {
@@ -107,13 +107,13 @@ HTTP 201
 [Captures]
 task_id: jsonpath "$.data.id"
 
-GET http://localhost:18080/projects/{{project_id}}/tasks
+GET {{base_url}}/projects/{{project_id}}/tasks
 Authorization: Bearer {{client_token}}
 HTTP 200
 [Asserts]
 jsonpath "$.data.items[0].id" == "{{task_id}}"
 
-POST http://localhost:18080/projects/{{project_id}}/tasks/{{task_id}}/comments
+POST {{base_url}}/projects/{{project_id}}/tasks/{{task_id}}/comments
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
@@ -121,7 +121,7 @@ Content-Type: application/json
 }
 HTTP 201
 
-PATCH http://localhost:18080/tasks/{{task_id}}
+PATCH {{base_url}}/tasks/{{task_id}}
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {

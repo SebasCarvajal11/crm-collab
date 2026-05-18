@@ -1,15 +1,14 @@
-# Dependencias
 node_modules/
 .pnp
 .pnp.js
+.pnpm-store/
 
-# Compilados
 dist/
 build/
 out/
 .tanstack/
+coverage/
 
-# Variables de entorno y secretos (NUNCA SE SUBEN)
 .env
 .env.local
 .env.*.local
@@ -17,9 +16,16 @@ out/
 *.key
 cookies.jar
 
-# Logs y SO
-logs
+logs/
 *.log
-npm-debug.log*
+*.out
+*.err
+*.pid
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.tmp
+*.temp
+*.orig
+*.tsbuildinfo

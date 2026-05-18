@@ -1,10 +1,10 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
 # Copy dependency files
-RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && corepack prepare pnpm@11.1.1 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY tsconfig.json ./
 
 # Install only production dependencies

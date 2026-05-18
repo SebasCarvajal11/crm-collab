@@ -29,3 +29,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Build production image
+        run: docker build -t crm-collab:ci .
