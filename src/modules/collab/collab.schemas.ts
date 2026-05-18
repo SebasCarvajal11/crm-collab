@@ -102,7 +102,7 @@ export const UpdateColumnSchema = z.object({
 
 export const AssigneeSchema = z.object({
   user_sub: z.string().uuid(),
-  user_email: z.string().email().max(255),
+  user_email: z.string().email().max(255).optional(),
 });
 
 export const SubtaskSchema = z.object({

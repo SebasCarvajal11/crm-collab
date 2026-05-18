@@ -1,7 +1,12 @@
 import { serve } from "@hono/node-server";
 import { env } from "./config/env";
 import { pool } from "./db/connection";
+import { ensureAuditLogPartitions } from "./db/scripts/ensure-audit-log-partitions";
 import { setupDefaultEventHandlers } from "./modules/collab/events";
+
+await ensureAuditLogPartitions(pool).catch((err) =>
+  console.error("[audit_logs] ensure partitions:", err),
+);
 
 const { createApp } = await import("./app");
 

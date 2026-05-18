@@ -1,6 +1,6 @@
 /**
  * Seed de desarrollo — crea proyectos, tareas y datos de prueba realistas.
- * Uso: npx tsx src/db/seed.ts
+ * Uso: pnpm db:seed
  * 
  * IMPORTANTE: Ejecutar primero el seed de mod-auth para obtener los subjects de usuarios.
  */
@@ -508,7 +508,7 @@ async function seed() {
   const clientData = (authClientsResult.rows as any[]).map((r) => ({ subject: r.subject, email: r.email }));
 
   if (!adminSub) {
-    console.error("❌ No se encontró un admin en schema_auth.users. Ejecuta primero: npm run db:seed en mod-auth");
+    console.error("❌ No se encontró un admin en schema_auth.users. Ejecuta primero: pnpm db:seed en mod-auth");
     process.exit(1);
   }
 

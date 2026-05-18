@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { authMiddleware, type AppEnv } from "../../shared/middlewares/auth.middleware";
+import { collabWriteRateLimit } from "../../shared/middlewares/rate-limit.middleware";
 import { createCollabRepository } from "./collab.repository";
 import { createCollabService } from "./collab.service";
 import { createCollabController } from "./collab.controller";
@@ -23,6 +24,10 @@ import {
   FileIdParamSchema,
   ProjectFiltersQuerySchema,
   ProjectSearchQuerySchema,
+  ChatMessageQuerySchema,
+  FormalChangeLogQuerySchema,
+  ProjectTasksQuerySchema,
+  ProjectFilesQuerySchema,
   ProjectIdParamSchema,
   ProjectTaskIdParamSchema,
   ResolveChangeRequestSchema,
@@ -41,6 +46,10 @@ const collabController = createCollabController(collabService);
 export const collabRoutes = new Hono<AppEnv>();
 
 collabRoutes.use("*", authMiddleware);
+collabRoutes.use("*", collabWriteRateLimit());
+
+/** Validación de acceso a storage_path (mod-media → mod-collab). */
+collabRoutes.get("/internal/storage-access", collabController.assertStoragePathAccess);
 
 collabRoutes.get("/projects", zValidator("query", ProjectFiltersQuerySchema), collabController.listProjects);
 collabRoutes.get("/projects/search", zValidator("query", ProjectSearchQuerySchema), collabController.searchProjects);
@@ -92,7 +101,12 @@ collabRoutes.patch(
   collabController.updateTaskColumn
 );
 
-collabRoutes.get("/projects/:projectId/tasks", zValidator("param", ProjectIdParamSchema), collabController.listTasks);
+collabRoutes.get(
+  "/projects/:projectId/tasks",
+  zValidator("param", ProjectIdParamSchema),
+  zValidator("query", ProjectTasksQuerySchema),
+  collabController.listTasks
+);
 collabRoutes.post(
   "/projects/:projectId/tasks",
   zValidator("param", ProjectIdParamSchema),
@@ -109,6 +123,7 @@ collabRoutes.patch(
 collabRoutes.get(
   "/projects/:projectId/chat/internal",
   zValidator("param", ProjectIdParamSchema),
+  zValidator("query", ChatMessageQuerySchema),
   collabController.listInternalChat
 );
 collabRoutes.post(
@@ -126,6 +141,7 @@ collabRoutes.post(
 collabRoutes.get(
   "/projects/:projectId/chat/external",
   zValidator("param", ProjectIdParamSchema),
+  zValidator("query", ChatMessageQuerySchema),
   collabController.listExternalChat
 );
 collabRoutes.post(
@@ -170,6 +186,7 @@ collabRoutes.patch(
 collabRoutes.get(
   "/projects/:projectId/change-log/formal",
   zValidator("param", ProjectIdParamSchema),
+  zValidator("query", FormalChangeLogQuerySchema),
   collabController.listFormalChangeLog
 );
 
@@ -207,6 +224,11 @@ collabRoutes.post(
   zValidator("param", ProjectIdParamSchema),
   zValidator("json", GenerateUploadUrlSchema),
   collabController.generateProjectFileUploadUrl
+);
+collabRoutes.delete(
+  "/projects/:projectId/files/uploaded-object",
+  zValidator("param", ProjectIdParamSchema),
+  collabController.abortUploadedFileObject
 );
 collabRoutes.patch(
   "/files/:fileId/approve",

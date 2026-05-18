@@ -12,9 +12,11 @@ services:
       PORT: 3001
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
-      MOD_COLLAB_CORS: ${MOD_COLLAB_CORS:-true}
+      MOD_COLLAB_CORS: ${MOD_COLLAB_CORS:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
-      GATEWAY_TRUST_TOKEN: ${GATEWAY_TRUST_TOKEN}
+      MOD_AUTH_URL: ${MOD_AUTH_URL:-http://host.docker.internal:3000}
+      MOD_MEDIA_URL: ${MOD_MEDIA_URL:-http://host.docker.internal:3002}
+      GATEWAY_TRUST_SECRET: ${GATEWAY_TRUST_SECRET}
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,9 +34,9 @@ services:
     image: postgres:16-alpine
     container_name: mod-collab-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-cima_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cima_password}
-      POSTGRES_DB: ${POSTGRES_DB:-cima_crm}
+      POSTGRES_USER: ${POSTGRES_USER:-root}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rootpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-crm_database}
     ports:
       - "5432:5432"
     volumes:
@@ -44,7 +46,7 @@ services:
       - cima-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cima_user} -d ${POSTGRES_DB:-cima_crm}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-root} -d ${POSTGRES_DB:-crm_database}"]
       interval: 10s
       timeout: 5s
       retries: 5

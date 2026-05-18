@@ -1,10 +1,17 @@
 # ============================================================
-# mod-collab — Smoke RBAC via KrakenD
-# Ejecutar con variables:
-# hurl --test --variable WORKER_EMAIL=... --variable CLIENT_EMAIL=... tests/01_gateway_rbac_collab.hurl
+# mod-collab - Smoke RBAC via KrakenD usando usuarios seed
+# Variables inyectadas por el runner:
+#   LOGIN_IP
+#   WORKER_EMAIL
+#   WORKER_PASSWORD
+#   CLIENT_EMAIL
+#   CLIENT_PASSWORD
+#   TEST_SUFFIX
 # ============================================================
 
-POST http://localhost:8080/auth/login
+POST http://localhost:18080/auth/login
+X-Forwarded-For: {{LOGIN_IP}}
+X-Real-IP: {{LOGIN_IP}}
 Content-Type: application/json
 {
   "email": "admin@cima.dev",
@@ -14,119 +21,85 @@ HTTP 200
 [Captures]
 admin_token: jsonpath "$.data.access_token"
 
-POST http://localhost:8080/auth/register-worker
-Authorization: Bearer {{admin_token}}
-Content-Type: application/json
-{
-  "email": "{{WORKER_EMAIL}}"
-}
-HTTP 201
-[Captures]
-worker_temp_password: jsonpath "$.data.temp_password"
-
-POST http://localhost:8080/auth/login
+POST http://localhost:18080/auth/login
+X-Forwarded-For: {{LOGIN_IP}}
+X-Real-IP: {{LOGIN_IP}}
 Content-Type: application/json
 {
   "email": "{{WORKER_EMAIL}}",
-  "password": "{{worker_temp_password}}"
+  "password": "{{WORKER_PASSWORD}}"
 }
 HTTP 200
 [Captures]
 worker_token: jsonpath "$.data.access_token"
+worker_subject: jsonpath "$.data.user.id"
 
-POST http://localhost:8080/auth/invite-client
-Authorization: Bearer {{admin_token}}
+POST http://localhost:18080/auth/login
+X-Forwarded-For: {{LOGIN_IP}}
+X-Real-IP: {{LOGIN_IP}}
 Content-Type: application/json
 {
-  "email": "{{CLIENT_EMAIL}}"
+  "email": "{{CLIENT_EMAIL}}",
+  "password": "{{CLIENT_PASSWORD}}"
 }
-HTTP 201
-[Captures]
-invite_token: jsonpath "$.data.token"
-
-POST http://localhost:8080/auth/accept-invite
-Content-Type: application/json
-{
-  "token": "{{invite_token}}",
-  "password": "Client123!"
-}
-HTTP 201
+HTTP 200
 [Captures]
 client_token: jsonpath "$.data.access_token"
 client_subject: jsonpath "$.data.user.id"
 
-GET http://localhost:8080/collab/workspaces
+GET http://localhost:18080/projects
 HTTP 401
 
-POST http://localhost:8080/collab/workspaces
-Authorization: Bearer {{worker_token}}
-Content-Type: application/json
-{
-  "name": "Workspace RBAC",
-  "description": "Prueba de permisos"
-}
-HTTP 201
-[Captures]
-workspace_id: jsonpath "$.data.id"
-
-POST http://localhost:8080/collab/workspaces
+POST http://localhost:18080/projects
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
-  "name": "No permitido cliente",
-  "description": "Debe fallar"
+  "name": "Proyecto no permitido {{TEST_SUFFIX}}",
+  "description": "Debe fallar",
+  "client_name": "Cliente seed",
+  "client_sub": "{{client_subject}}",
+  "worker_subs": ["{{worker_subject}}"],
+  "type": "campaign_service",
+  "brief": "Brief de prueba"
 }
 HTTP 403
 
-PUT http://localhost:8080/collab/workspaces/{{workspace_id}}/members
-Authorization: Bearer {{worker_token}}
+POST http://localhost:18080/projects
+Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 {
-  "user_sub": "{{client_subject}}",
-  "role": "client"
+  "name": "Proyecto RBAC {{TEST_SUFFIX}}",
+  "description": "Prueba de permisos vigente",
+  "client_name": "Cliente seed",
+  "client_sub": "{{client_subject}}",
+  "worker_subs": ["{{worker_subject}}"],
+  "type": "campaign_service",
+  "brief": "Brief inicial de prueba"
 }
+HTTP 201
+[Captures]
+project_id: jsonpath "$.data.id"
+
+GET http://localhost:18080/projects/{{project_id}}/workspace
+Authorization: Bearer {{worker_token}}
 HTTP 200
-
-POST http://localhost:8080/collab/workspaces/{{workspace_id}}/boards
-Authorization: Bearer {{client_token}}
-Content-Type: application/json
-{
-  "name": "Board cliente",
-  "description": "Debe fallar"
-}
-HTTP 403
-
-POST http://localhost:8080/collab/workspaces/{{workspace_id}}/boards
-Authorization: Bearer {{worker_token}}
-Content-Type: application/json
-{
-  "name": "Board RBAC",
-  "description": "Board de prueba"
-}
-HTTP 201
 [Captures]
-board_id: jsonpath "$.data.id"
+column_id: jsonpath "$.data.board.columns[0].id"
 
-POST http://localhost:8080/collab/boards/{{board_id}}/columns
-Authorization: Bearer {{worker_token}}
-Content-Type: application/json
-{
-  "title": "To Do",
-  "position": 0
-}
-HTTP 201
-[Captures]
-column_id: jsonpath "$.data.id"
-
-POST http://localhost:8080/collab/boards/{{board_id}}/tasks
+POST http://localhost:18080/projects/{{project_id}}/tasks
 Authorization: Bearer {{worker_token}}
 Content-Type: application/json
 {
   "column_id": "{{column_id}}",
-  "title": "Tarea visible cliente",
+  "title": "Tarea visible cliente {{TEST_SUFFIX}}",
   "description": "Debe poder verla y comentar",
   "priority": "medium",
-  "status": "todo",
+  "assignees": [
+    {
+      "user_sub": "{{worker_subject}}",
+      "user_email": "{{WORKER_EMAIL}}"
+    }
+  ],
   "client_visible": true,
   "position": 0
 }
@@ -134,24 +107,24 @@ HTTP 201
 [Captures]
 task_id: jsonpath "$.data.id"
 
-GET http://localhost:8080/collab/boards/{{board_id}}/tasks
+GET http://localhost:18080/projects/{{project_id}}/tasks
 Authorization: Bearer {{client_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.data[0].id" == "{{task_id}}"
+jsonpath "$.data.items[0].id" == "{{task_id}}"
 
-POST http://localhost:8080/collab/tasks/{{task_id}}/comments
+POST http://localhost:18080/projects/{{project_id}}/tasks/{{task_id}}/comments
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
-  "body": "Comentario del cliente"
+  "content": "Comentario del cliente {{TEST_SUFFIX}}"
 }
 HTTP 201
 
-PATCH http://localhost:8080/collab/tasks/{{task_id}}
+PATCH http://localhost:18080/tasks/{{task_id}}
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
-  "status": "done"
+  "title": "Edicion no permitida"
 }
 HTTP 403

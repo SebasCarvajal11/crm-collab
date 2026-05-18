@@ -175,7 +175,6 @@ export const createProjectsRepository = (conn: DbOrTx) => ({
 
   listProjectsForUser: async (opts: {
     userSub: string;
-    isAdminGlobal: boolean;
     type?: "campaign_service" | "product_order";
     status?: "todo" | "in_progress" | "in_review" | "completed";
     adminResponsibleSub?: string;
@@ -192,23 +191,6 @@ export const createProjectsRepository = (conn: DbOrTx) => ({
         : undefined,
       opts.clientName ? ilike(projects.clientName, `%${opts.clientName}%`) : undefined
     );
-
-    if (opts.isAdminGlobal) {
-      const [totalCount] = await conn
-        .select({ count: count() })
-        .from(projects)
-        .where(filters);
-
-      const rows = await conn
-        .select()
-        .from(projects)
-        .where(filters)
-        .orderBy(desc(projects.updatedAt))
-        .limit(opts.limit)
-        .offset(opts.offset);
-
-      return { rows, total: totalCount?.count ?? 0 };
-    }
 
     const memberships = await conn
       .select({ projectId: projectMembers.projectId })
@@ -266,9 +248,8 @@ export const createProjectsRepository = (conn: DbOrTx) => ({
       FROM schema_collab.projects p
       LEFT JOIN schema_collab.project_members pm_client
         ON pm_client.project_id = p.id AND pm_client.role = 'client'
-      ${opts.role === "admin"
-        ? sql``
-        : sql`INNER JOIN schema_collab.project_members pm_scope ON pm_scope.project_id = p.id AND pm_scope.user_sub = ${opts.userSub}`}
+      INNER JOIN schema_collab.project_members pm_scope
+        ON pm_scope.project_id = p.id AND pm_scope.user_sub = ${opts.userSub}
       WHERE
         p.is_archived = false
         AND (
@@ -979,6 +960,25 @@ export const createProjectsRepository = (conn: DbOrTx) => ({
 
   findFileById: async (fileId: string) => {
     const [row] = await conn.select().from(projectFiles).where(eq(projectFiles.id, fileId)).limit(1);
+    return row ?? null;
+  },
+
+  listAllProjectFileStoragePaths: async () => {
+    const rows = await conn
+      .select({ storagePath: projectFiles.storagePath })
+      .from(projectFiles);
+    return rows.map((r) => r.storagePath);
+  },
+
+  findFileByStoragePath: async (storagePath: string) => {
+    const [row] = await conn
+      .select({
+        projectId: projectFiles.projectId,
+        isClientVisible: projectFiles.isClientVisible,
+      })
+      .from(projectFiles)
+      .where(eq(projectFiles.storagePath, storagePath))
+      .limit(1);
     return row ?? null;
   },
 

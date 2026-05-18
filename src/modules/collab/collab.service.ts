@@ -6,8 +6,15 @@ import { fetchUserProfiles } from "../../shared/auth-client";
 import { getMediaDocumentAccessUrl, deleteDocumentInMedia } from "../../shared/media-client";
 import { v4 as uuidv4 } from "uuid";
 import { ociStorage } from "../../shared/storage/oci-storage";
+import { sanitizeFileName } from "../../shared/sanitize-filename";
 
-type Actor = { sub: string; role: GlobalRole; email: string };
+type Actor = {
+  sub: string;
+  userId: string;
+  role: GlobalRole;
+  email: string;
+  bearerToken?: string;
+};
 type RequestMeta = { ipAddress: string; userAgent: string };
 
 const canManageProject = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
@@ -20,6 +27,9 @@ const canReceiveMentionInChannel = (channel: "internal" | "external", memberRole
   channel === "internal" ? memberRole === "admin" || memberRole === "worker" : true;
 
 const FINALIZATION_COLUMN_KEYS = new Set(["done", "completed"]);
+
+/** Máximo de tareas cargadas en workspace/board en una sola petición. */
+const PROJECT_BOARD_TASK_LIMIT = 2000;
 
 const BLOCKED_EXTENSIONS = new Set([
   ".exe", ".bat", ".cmd", ".sh", ".ps1", ".msi", ".dll", ".com",
@@ -36,19 +46,35 @@ const BLOCKED_MIMES = new Set([
   "application/x-php",
 ]);
 
+const isCollabManagedStoragePath = (storagePath: string) => storagePath.startsWith("projects/");
+
 const assertAllowedUploadMime = (mimeType: string, fileName: string) => {
   const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
   if (BLOCKED_EXTENSIONS.has(ext)) throw new BadRequestError("Tipo de archivo no permitido");
   if (BLOCKED_MIMES.has(mimeType)) throw new BadRequestError("Tipo de archivo no permitido");
 };
 
-const sanitizeFileName = (input: string) => {
-  const clean = input
-    .normalize("NFKD")
-    .replace(/[^\w.\-]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return clean || `file_${Date.now()}`;
+const assertOciObjectRegistered = async (
+  projectId: string,
+  storagePath: string,
+  taskId?: string,
+) => {
+  const projectPrefix = `projects/${projectId}/`;
+  if (!storagePath.startsWith(projectPrefix)) {
+    throw new BadRequestError("storage_path no pertenece al proyecto");
+  }
+  if (taskId) {
+    const taskPrefix = `projects/${projectId}/tasks/${taskId}/`;
+    if (!storagePath.startsWith(taskPrefix)) {
+      throw new BadRequestError("storage_path no pertenece a la tarea");
+    }
+  }
+  const exists = await ociStorage.headObject(storagePath);
+  if (!exists) {
+    throw new BadRequestError(
+      "El archivo aún no está en almacenamiento; completa el upload a OCI antes de confirmar",
+    );
+  }
 };
 
 const calculateChecklistProgress = (
@@ -130,10 +156,13 @@ const inferProgress = (type: ProjectType, taskColumnKeys: string[]): number => {
   return Math.round(sum / taskColumnKeys.length);
 };
 
+/**
+ * Acceso a un proyecto solo por membresía en `project_members`.
+ * El rol global `admin` no omite esta comprobación (aislamiento entre administradores).
+ */
 const assertProjectAccess = async (repo: CollabRepository, actor: Actor, projectId: string) => {
   const project = await repo.findProjectById(projectId);
   if (!project) throw new NotFoundError("Proyecto no encontrado");
-  if (actor.role === "admin") return { project, member: null };
   const member = await repo.findProjectMember(projectId, actor.sub);
   if (!member) throw new ForbiddenError("No eres miembro del proyecto");
   return { project, member };
@@ -166,6 +195,41 @@ const assertWorkerOnlyAssignments = async (
   }
 };
 
+const resolveAssigneeEmails = async (
+  repo: CollabRepository,
+  actor: Actor,
+  projectId: string,
+  assignees: { userSub: string; userEmail?: string }[]
+): Promise<{ userSub: string; userEmail: string }[]> => {
+  if (!assignees.length) return [];
+
+  const members = await repo.listProjectMembers(projectId);
+  const emailBySub = new Map(
+    members.map((m) => [m.userSub, m.userEmail] as const)
+  );
+
+  const missingSubs = [
+    ...new Set(
+      assignees
+        .filter((a) => !a.userEmail && !emailBySub.get(a.userSub))
+        .map((a) => a.userSub)
+    ),
+  ];
+  const { profiles } =
+    missingSubs.length > 0 ? await fetchUserProfiles(missingSubs, actor) : { profiles: new Map() };
+
+  return assignees.map((a) => {
+    const email =
+      a.userEmail ?? emailBySub.get(a.userSub) ?? profiles.get(a.userSub)?.email ?? null;
+    if (!email) {
+      throw new BadRequestError(
+        "No se pudo resolver el correo de uno o más asignados. Verifica que mod-auth esté activo (MOD_AUTH_URL) y reinicia mod-collab."
+      );
+    }
+    return { userSub: a.userSub, userEmail: email };
+  });
+};
+
 const buildMemberAssignmentMaps = (
   assignees: Array<{ userSub: string; userEmail: string }>,
   tasks: Array<{ assigneeSub: string | null }>
@@ -187,7 +251,9 @@ const buildMemberAssignmentMaps = (
 };
 
 const enrichProjectMembersWithProfiles = async (
+  repo: CollabRepository,
   members: Array<{
+    projectId: string;
     userSub: string;
     role: "admin" | "worker" | "client";
     userEmail: string | null;
@@ -199,7 +265,26 @@ const enrichProjectMembersWithProfiles = async (
 ) => {
   const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks);
   const userSubs = [...new Set(members.map((m) => m.userSub).filter(Boolean))];
-  const profileMap = await fetchUserProfiles(userSubs, actor);
+  const { profiles: profileMap, enrichmentFailed } = await fetchUserProfiles(userSubs, actor);
+  if (enrichmentFailed) {
+    console.warn("[collab] Perfiles de miembros incompletos: mod-auth no disponible o error de red");
+  }
+
+  if (!enrichmentFailed) {
+    await Promise.all(
+      members.map(async (member) => {
+        const profileEmail = profileMap.get(member.userSub)?.email;
+        if (profileEmail && !member.userEmail) {
+          await repo.upsertProjectMember({
+            projectId: member.projectId,
+            userSub: member.userSub,
+            role: member.role,
+            userEmail: profileEmail,
+          });
+        }
+      })
+    );
+  }
 
   return members.map((member) => ({
     ...member,
@@ -228,7 +313,6 @@ export const createCollabService = (repo: CollabRepository) => ({
   ) => {
     const { rows, total } = await repo.listProjectsForUser({
       userSub: actor.sub,
-      isAdminGlobal: actor.role === "admin",
       type: query.type,
       status: query.status,
       adminResponsibleSub: query.adminSub,
@@ -275,7 +359,20 @@ export const createCollabService = (repo: CollabRepository) => ({
     meta: RequestMeta
   ) => {
     if (actor.role !== "admin") throw new ForbiddenError("Solo admin puede crear proyectos");
-    
+
+    const uniqueWorkerSubs = [...new Set(payload.workerSubs)].filter(
+      (sub) => sub !== actor.sub && sub !== payload.clientSub
+    );
+    const subsForProfiles = [
+      ...uniqueWorkerSubs,
+      ...(payload.clientSub ? [payload.clientSub] : []),
+    ];
+    const memberProfilesResult =
+      subsForProfiles.length > 0
+        ? await fetchUserProfiles(subsForProfiles, actor)
+        : await fetchUserProfiles([], actor);
+    const memberProfiles = memberProfilesResult.profiles;
+
     const project = await repo.transaction(async (txRepo) => {
       const project = await txRepo.createProject({
         name: payload.name,
@@ -294,12 +391,21 @@ export const createCollabService = (repo: CollabRepository) => ({
         role: "admin",
         userEmail: actor.email,
       });
-      const uniqueWorkerSubs = [...new Set(payload.workerSubs)].filter((sub) => sub !== actor.sub && sub !== payload.clientSub);
       for (const workerSub of uniqueWorkerSubs) {
-        await txRepo.upsertProjectMember({ projectId: project.id, userSub: workerSub, role: "worker", userEmail: null });
+        await txRepo.upsertProjectMember({
+          projectId: project.id,
+          userSub: workerSub,
+          role: "worker",
+          userEmail: memberProfiles.get(workerSub)?.email ?? null,
+        });
       }
       if (payload.clientSub) {
-        await txRepo.upsertProjectMember({ projectId: project.id, userSub: payload.clientSub, role: "client", userEmail: null });
+        await txRepo.upsertProjectMember({
+          projectId: project.id,
+          userSub: payload.clientSub,
+          role: "client",
+          userEmail: memberProfiles.get(payload.clientSub)?.email ?? null,
+        });
       }
       for (const c of defaultColumnsByType(payload.type)) {
         await txRepo.createTaskColumn({
@@ -325,7 +431,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
 
     // Emit event
-    await collabEvents.emit("project.created", project.id, actor.sub, {
+    void collabEvents.emit("project.created", project.id, actor.sub, {
       projectId: project.id,
       projectName: project.name,
       projectType: project.type,
@@ -377,19 +483,32 @@ export const createCollabService = (repo: CollabRepository) => ({
     const [members, columns, tasks, brief, formalChanges, assignees] = await Promise.all([
       repo.listProjectMembers(projectId),
       repo.listTaskColumnsByProject(projectId),
-      repo.listTasksByProject({ projectId, limit: 1000, offset: 0 }),
+      repo.listTasksByProject({ projectId, limit: PROJECT_BOARD_TASK_LIMIT, offset: 0 }),
       repo.getBriefByProject(projectId),
       repo.listChangeRequestsByProject(projectId, "formal"),
       repo.listTaskAssigneesByProject(projectId),
     ]);
 
-    const enrichedMembers = await enrichProjectMembersWithProfiles(members, actor, assignees, tasks.rows);
+    const enrichedMembers = await enrichProjectMembersWithProfiles(repo, members, actor, assignees, tasks.rows);
 
     const isClient = actor.role === "client";
     const visibleColumns = isClient ? columns.filter((c: any) => c.isClientVisible) : columns;
     const visibleTasks = isClient ? tasks.rows.filter((t: any) => t.isClientVisible) : tasks.rows;
+    const tasksTruncated = tasks.total > PROJECT_BOARD_TASK_LIMIT;
 
-    return { project, members: enrichedMembers, board: { columns: visibleColumns, tasks: visibleTasks }, brief, formalChanges };
+    return {
+      project,
+      members: enrichedMembers,
+      board: {
+        columns: visibleColumns,
+        tasks: visibleTasks,
+        tasksTotal: tasks.total,
+        tasksLimit: PROJECT_BOARD_TASK_LIMIT,
+        tasksTruncated,
+      },
+      brief,
+      formalChanges,
+    };
   },
 
   getProjectBoard: async (actor: Actor, projectId: string) => {
@@ -398,7 +517,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     const [members, columns, tasks, assignees] = await Promise.all([
       repo.listProjectMembers(projectId),
       repo.listTaskColumnsByProject(projectId),
-      repo.listTasksByProject({ projectId, limit: 2000, offset: 0 }),
+      repo.listTasksByProject({ projectId, limit: PROJECT_BOARD_TASK_LIMIT, offset: 0 }),
       repo.listTaskAssigneesByProject(projectId),
     ]);
 
@@ -418,8 +537,19 @@ export const createCollabService = (repo: CollabRepository) => ({
     const isClient = actor.role === "client";
     const visibleColumns = isClient ? columns.filter((c) => c.isClientVisible) : columns;
     const visibleTasks = isClient ? tasks.rows.filter((t) => t.isClientVisible) : tasks.rows;
+    const tasksTruncated = tasks.total > PROJECT_BOARD_TASK_LIMIT;
 
-    return { project, members: lightweightMembers, board: { columns: visibleColumns, tasks: visibleTasks } };
+    return {
+      project,
+      members: lightweightMembers,
+      board: {
+        columns: visibleColumns,
+        tasks: visibleTasks,
+        tasksTotal: tasks.total,
+        tasksLimit: PROJECT_BOARD_TASK_LIMIT,
+        tasksTruncated,
+      },
+    };
   },
 
 
@@ -453,9 +583,9 @@ export const createCollabService = (repo: CollabRepository) => ({
     const [members, assignees, tasks] = await Promise.all([
       repo.listProjectMembers(projectId),
       repo.listTaskAssigneesByProject(projectId),
-      repo.listTasksByProject({ projectId, limit: 2000, offset: 0 }),
+      repo.listTasksByProject({ projectId, limit: PROJECT_BOARD_TASK_LIMIT, offset: 0 }),
     ]);
-    return enrichProjectMembersWithProfiles(members, actor, assignees, tasks.rows);
+    return enrichProjectMembersWithProfiles(repo, members, actor, assignees, tasks.rows);
   },
 
   createTaskColumn: async (
@@ -525,7 +655,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       title: string;
       description?: string;
       priority: "low" | "medium" | "high" | "urgent";
-      assignees?: { userSub: string; userEmail: string }[];
+      assignees?: { userSub: string; userEmail?: string }[];
       dueDate?: Date | null;
       checklistProgress: number;
       blockedByTaskId?: string | null;
@@ -567,7 +697,8 @@ export const createCollabService = (repo: CollabRepository) => ({
       await repo.upsertSubtasks(task.id, payload.subtasks);
     }
     if (payload.assignees?.length) {
-      await repo.upsertTaskAssignees(task.id, payload.assignees);
+      const resolvedAssignees = await resolveAssigneeEmails(repo, actor, projectId, payload.assignees);
+      await repo.upsertTaskAssignees(task.id, resolvedAssignees);
     }
     await repo.syncProjectStatusAndProgress(projectId);
     await repo.createAuditLog({
@@ -610,7 +741,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       title?: string;
       description?: string | null;
       priority?: "low" | "medium" | "high" | "urgent";
-      assignees?: { userSub: string; userEmail: string }[];
+      assignees?: { userSub: string; userEmail?: string }[];
       dueDate?: Date | null;
       checklistProgress?: number;
       blockedByTaskId?: string | null;
@@ -674,9 +805,15 @@ export const createCollabService = (repo: CollabRepository) => ({
       await repo.upsertSubtasks(taskId, patch.subtasks);
     }
     if (patch.assignees !== undefined) {
-      await repo.upsertTaskAssignees(taskId, patch.assignees);
+      const resolvedAssignees = await resolveAssigneeEmails(repo, actor, task.projectId, patch.assignees);
+      await repo.upsertTaskAssignees(taskId, resolvedAssignees);
     }
-    await repo.syncProjectStatusAndProgress(task.projectId);
+    const columnChanged =
+      patch.columnId !== undefined && patch.columnId !== task.columnId;
+    if (columnChanged) {
+      await repo.syncProjectStatusAndProgress(task.projectId);
+    }
+
     await repo.createAuditLog({
       actorSub: actor.sub,
       action: "project_task_updated",
@@ -687,7 +824,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
 
     if (patch.columnId && patch.columnId !== task.columnId) {
-      await collabEvents.emit("task.moved", task.projectId, actor.sub, {
+      void collabEvents.emit("task.moved", task.projectId, actor.sub, {
         taskId: task.id,
         taskTitle: updated.title,
         fromColumnKey: currentColumn.key,
@@ -699,7 +836,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (patch.assignees !== undefined) {
       const newPrimary = patch.assignees[0]?.userSub;
       if (newPrimary && newPrimary !== task.assigneeSub) {
-        await collabEvents.emit("task.assigned", task.projectId, actor.sub, {
+        void collabEvents.emit("task.assigned", task.projectId, actor.sub, {
           taskId: task.id,
           taskTitle: updated.title,
           assigneeSub: newPrimary,
@@ -842,7 +979,7 @@ export const createCollabService = (repo: CollabRepository) => ({
 
     // Emit chat message event
     const eventType = channel === "internal" ? "chat.message.internal" : "chat.message.external";
-    await collabEvents.emit(eventType, projectId, actor.sub, {
+    void collabEvents.emit(eventType, projectId, actor.sub, {
       messageId: row.id,
       channel,
       body,
@@ -850,7 +987,7 @@ export const createCollabService = (repo: CollabRepository) => ({
 
     // Emit mention events if any
     if (mentionSubs.length > 0) {
-      await collabEvents.emit("chat.mention", projectId, actor.sub, {
+      void collabEvents.emit("chat.mention", projectId, actor.sub, {
         messageId: row.id,
         channel,
         mentionedSubs: mentionSubs,
@@ -908,7 +1045,10 @@ export const createCollabService = (repo: CollabRepository) => ({
       ? rows.filter((row) => row.channel !== "internal")
       : rows;
     const authorSubs = [...new Set(visibleRows.map((r) => r.authorSub).filter((v): v is string => Boolean(v)))];
-    const profileMap = await fetchUserProfiles(authorSubs, actor);
+    const { profiles: profileMap, enrichmentFailed } = await fetchUserProfiles(authorSubs, actor);
+    if (enrichmentFailed) {
+      console.warn("[collab] Nombres de autores en notificaciones pueden estar incompletos (mod-auth)");
+    }
     return visibleRows.map((row) => {
       const profile = row.authorSub ? profileMap.get(row.authorSub) : undefined;
       const authorName = [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim();
@@ -978,7 +1118,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
 
     // Emit event
-    await collabEvents.emit("change_request.minor.created", projectId, actor.sub, {
+    void collabEvents.emit("change_request.minor.created", projectId, actor.sub, {
       changeRequestId: request.id,
       taskId: payload.taskId,
       taskTitle: task.title,
@@ -1025,7 +1165,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
 
     // Emit event
-    await collabEvents.emit("change_request.formal.created", projectId, actor.sub, {
+    void collabEvents.emit("change_request.formal.created", projectId, actor.sub, {
       changeRequestId: request.id,
       taskId: payload.taskId,
       requestedBySub: actor.sub,
@@ -1048,11 +1188,18 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (!req || req.projectId !== projectId) throw new NotFoundError("Solicitud no encontrada");
     const { member } = await assertProjectAccess(repo, actor, projectId);
     if (req.type === "minor") {
-      const canResolveMinor = actor.role === "admin" || member?.role === "worker" || member?.role === "admin";
-      if (!canResolveMinor) throw new ForbiddenError("Solo worker/admin resuelven ajuste menor");
+      const canResolveMinor =
+        actor.role === "admin" || member.role === "worker" || member.role === "admin";
+      if (!canResolveMinor) {
+        throw new ForbiddenError("Solo worker o administrador del proyecto resuelven ajuste menor");
+      }
     } else {
-      const canResolveFormal = actor.role === "admin" || member?.role === "admin";
-      if (!canResolveFormal) throw new ForbiddenError("Solo admin resuelve cambio formal");
+      // README: "Solo Admin" = rol global admin (no basta ser admin del proyecto).
+      if (actor.role !== "admin") {
+        throw new ForbiddenError(
+          "Solo un administrador del sistema puede aprobar o rechazar un cambio formal"
+        );
+      }
     }
     const updated = await repo.updateChangeRequestById(changeRequestId, {
       status,
@@ -1087,7 +1234,7 @@ export const createCollabService = (repo: CollabRepository) => ({
         null;
       
       if (eventType) {
-        await collabEvents.emit(eventType, projectId, actor.sub, {
+        void collabEvents.emit(eventType, projectId, actor.sub, {
           changeRequestId: req.id,
           taskId: req.taskId!,
           status: status as "accepted" | "rejected" | "escalated",
@@ -1095,7 +1242,7 @@ export const createCollabService = (repo: CollabRepository) => ({
         });
       }
     } else if (req.type === "formal" && status === "approved") {
-      await collabEvents.emit("change_request.formal.approved", projectId, actor.sub, {
+      void collabEvents.emit("change_request.formal.approved", projectId, actor.sub, {
         changeRequestId: req.id,
         approvedBySub: actor.sub,
         title: req.title,
@@ -1168,14 +1315,17 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (payload.origin === "internal_chat" && !canInternalChat(actor.role, member?.role)) {
       throw new ForbiddenError("No autorizado para archivos internos");
     }
-    const latest = await repo.findLatestVersion(projectId, payload.fileName);
+    const fileName = sanitizeFileName(payload.fileName);
+    assertAllowedUploadMime(payload.mimeType, fileName);
+    await assertOciObjectRegistered(projectId, payload.storagePath);
+    const latest = await repo.findLatestVersion(projectId, fileName);
     const row = await repo.createFile({
       projectId,
       title: payload.title ?? null,
       description: payload.description ?? null,
       origin: payload.origin,
       folder: payload.folder,
-      fileName: payload.fileName,
+      fileName,
       storagePath: payload.storagePath,
       mimeType: payload.mimeType,
       sizeBytes: payload.sizeBytes,
@@ -1215,7 +1365,7 @@ export const createCollabService = (repo: CollabRepository) => ({
     });
 
     // Emit event
-    await collabEvents.emit("file.approved", file.projectId, actor.sub, {
+    void collabEvents.emit("file.approved", file.projectId, actor.sub, {
       fileId: file.id,
       fileName: file.fileName,
       folder: file.folder,
@@ -1337,6 +1487,9 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (actor.role === "client" && !canInternalChat(actor.role, member?.role)) {
       if (!task.isClientVisible) throw new ForbiddenError("No tienes acceso a esta tarea");
     }
+    const fileName = sanitizeFileName(payload.fileName);
+    assertAllowedUploadMime(payload.mimeType, fileName);
+    await assertOciObjectRegistered(projectId, payload.storagePath, taskId);
     const file = await repo.createFileForTask({
       projectId,
       taskId,
@@ -1344,7 +1497,7 @@ export const createCollabService = (repo: CollabRepository) => ({
       description: payload.description,
       origin: "manual_upload",
       folder: "shared_deliverables",
-      fileName: payload.fileName,
+      fileName,
       storagePath: payload.storagePath,
       mimeType: payload.mimeType,
       sizeBytes: payload.sizeBytes,
@@ -1390,6 +1543,14 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (actor.role === "client" && !file.isClientVisible) {
       throw new ForbiddenError("No tienes permiso para descargar este archivo");
     }
+    if (isCollabManagedStoragePath(file.storagePath)) {
+      const url = await ociStorage.createPresignedDownloadUrl(file.storagePath, file.mimeType, {
+        forceDownload,
+        fileName: file.fileName,
+      });
+      return { file, url, expiresInSeconds: 300 };
+    }
+
     const access = await getMediaDocumentAccessUrl(actor, file.storagePath, forceDownload);
     return { file, ...access };
   },
@@ -1401,7 +1562,11 @@ export const createCollabService = (repo: CollabRepository) => ({
     if (actor.role !== "admin" && file.createdBySub !== actor.sub) {
       throw new ForbiddenError("Solo el creador o un admin puede eliminar el archivo");
     }
-    await deleteDocumentInMedia(actor, file.storagePath);
+    if (isCollabManagedStoragePath(file.storagePath)) {
+      await ociStorage.deleteObject(file.storagePath);
+    } else {
+      await deleteDocumentInMedia(actor, file.storagePath);
+    }
     await repo.deleteFileById(fileId);
     await repo.createAuditLog({
       actorSub: actor.sub,
@@ -1493,6 +1658,38 @@ export const createCollabService = (repo: CollabRepository) => ({
     const key = `projects/${projectId}/tasks/${taskId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
     const uploadUrl = await ociStorage.createPresignedUploadUrl(key, payload.mimeType, 300);
     return { uploadUrl, objectKey: key, expiresInSeconds: 300 };
+  },
+
+  /**
+   * Elimina un objeto subido a OCI que aún no tiene fila en `project_files`
+   * (compensación si falla el paso de metadata tras el PUT prefirmado).
+   */
+  abortUnregisteredFileUpload: async (actor: Actor, projectId: string, objectKey: string) => {
+    await assertProjectAccess(repo, actor, projectId);
+    const prefix = `projects/${projectId}/`;
+    if (!objectKey.startsWith(prefix)) {
+      throw new ForbiddenError("La clave de almacenamiento no pertenece a este proyecto");
+    }
+    const existing = await repo.findFileByStoragePath(objectKey);
+    if (existing) {
+      throw new BadRequestError("El archivo ya está registrado");
+    }
+    if (await ociStorage.headObject(objectKey)) {
+      await ociStorage.deleteObject(objectKey);
+    }
+    return { deleted: true as const };
+  },
+
+  /** Usado por mod-media para validar acceso a `storage_path` registrado en proyecto. */
+  assertStoragePathAccess: async (actor: Actor, storagePath: string) => {
+    const file = await repo.findFileByStoragePath(storagePath);
+    if (!file) {
+      throw new NotFoundError("Archivo no registrado en colaboración");
+    }
+    await assertProjectAccess(repo, actor, file.projectId);
+    if (actor.role === "client" && !file.isClientVisible) {
+      throw new ForbiddenError("No tienes permiso para este archivo");
+    }
   },
 });
 

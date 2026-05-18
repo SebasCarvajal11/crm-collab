@@ -3,12 +3,12 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy dependency files
-COPY package*.json ./
+RUN corepack enable
+COPY package.json pnpm-lock.yaml ./
 COPY tsconfig.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && \
-    npm cache clean --force
+RUN pnpm install --prod --frozen-lockfile
 
 # Copy source code
 COPY src ./src
@@ -29,4 +29,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start server
-CMD ["npx", "tsx", "src/server.ts"]
+CMD ["pnpm", "start"]

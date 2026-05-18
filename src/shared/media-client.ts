@@ -8,10 +8,25 @@ type MediaAccessResponse = {
   };
 };
 
+export type MediaCallActor = {
+  sub: string;
+  userId: string;
+  role: string;
+  email: string;
+};
+
+const mediaServiceHeaders = (actor: MediaCallActor): Record<string, string> => ({
+  "X-Gateway-Trust": env.GATEWAY_TRUST_SECRET,
+  "X-User-Sub": actor.sub,
+  "X-User-Id": actor.userId,
+  "X-User-Role": actor.role,
+  "X-User-Email": actor.email,
+});
+
 export const getMediaDocumentAccessUrl = async (
-  actor: { sub: string; role: string; email: string },
+  actor: MediaCallActor,
   objectKey: string,
-  forceDownload: boolean
+  forceDownload: boolean,
 ) => {
   const qs = new URLSearchParams({
     objectKey,
@@ -23,12 +38,7 @@ export const getMediaDocumentAccessUrl = async (
   try {
     res = await fetch(url, {
       method: "GET",
-      headers: {
-        "X-User-Sub": actor.sub,
-        "X-User-Id": actor.sub,
-        "X-User-Role": actor.role,
-        "X-User-Email": actor.email,
-      },
+      headers: mediaServiceHeaders(actor),
     });
   } catch {
     throw new AppError(502, "No hay conectividad entre mod-collab y mod-media");
@@ -44,21 +54,13 @@ export const getMediaDocumentAccessUrl = async (
   return { url: signedUrl, expiresInSeconds: payload.data?.expiresInSeconds ?? 300 };
 };
 
-export const deleteDocumentInMedia = async (
-  actor: { sub: string; role: string; email: string },
-  objectKey: string
-) => {
+export const deleteDocumentInMedia = async (actor: MediaCallActor, objectKey: string) => {
   const qs = new URLSearchParams({ objectKey });
   let res: Response;
   try {
     res = await fetch(`${env.MOD_MEDIA_URL}/media/documents?${qs.toString()}`, {
       method: "DELETE",
-      headers: {
-        "X-User-Sub": actor.sub,
-        "X-User-Id": actor.sub,
-        "X-User-Role": actor.role,
-        "X-User-Email": actor.email,
-      },
+      headers: mediaServiceHeaders(actor),
     });
   } catch {
     throw new AppError(502, "No hay conectividad entre mod-collab y mod-media");

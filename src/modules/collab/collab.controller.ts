@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../../shared/middlewares/auth.middleware";
 import type { CollabService } from "./collab.service";
+import { formatContentDisposition } from "../../shared/sanitize-filename";
 import { validatedJson, validatedQuery } from "./validated-json";
 import { AppError } from "../../shared/middlewares/error-handler.middleware";
 import type {
@@ -30,16 +31,19 @@ import type {
   UpsertProjectMemberBody,
   GenerateUploadUrlBody,
 } from "./collab.schemas";
+import { actorFromContext } from "./actor";
 
 const getIp = (c: Context) =>
-  c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
+  c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+  c.req.header("x-real-ip")?.trim() ??
+  "unknown";
 const getUa = (c: Context) => c.req.header("user-agent") ?? "unknown";
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
 
 export const createCollabController = (service: CollabService) => ({
   listProjects: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ProjectFiltersQuery>(c);
-    const rows = await service.listProjects(c.get("user"), {
+    const rows = await service.listProjects(actorFromContext(c), {
       page: q.page,
       limit: q.limit,
       type: q.type,
@@ -52,14 +56,14 @@ export const createCollabController = (service: CollabService) => ({
 
   searchProjects: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ProjectSearchQuery>(c);
-    const rows = await service.searchProjects(c.get("user"), { q: q.q, limit: q.limit });
+    const rows = await service.searchProjects(actorFromContext(c), { q: q.q, limit: q.limit });
     return c.json({ data: rows }, 200);
   },
 
   createProject: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateProjectBody>(c);
     const created = await service.createProject(
-      c.get("user"),
+      actorFromContext(c),
       {
         name: body.name,
         description: body.description,
@@ -78,7 +82,7 @@ export const createCollabController = (service: CollabService) => ({
   updateProject: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpdateProjectBody>(c);
     const row = await service.updateProject(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       {
         name: body.name,
@@ -93,19 +97,19 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   getProjectWorkspace: async (c: Context<AppEnv>) => {
-    const data = await service.getProjectWorkspace(c.get("user"), requiredParam(c, "projectId"));
+    const data = await service.getProjectWorkspace(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data }, 200);
   },
 
   getProjectBoard: async (c: Context<AppEnv>) => {
-    const data = await service.getProjectBoard(c.get("user"), requiredParam(c, "projectId"));
+    const data = await service.getProjectBoard(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data }, 200);
   },
 
   upsertProjectMember: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpsertProjectMemberBody>(c);
     const row = await service.upsertProjectMember(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       body.user_sub,
       body.role,
@@ -116,14 +120,14 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listProjectMembers: async (c: Context<AppEnv>) => {
-    const rows = await service.listProjectMembers(c.get("user"), requiredParam(c, "projectId"));
+    const rows = await service.listProjectMembers(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
   },
 
   createTaskColumn: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateColumnBody>(c);
     const row = await service.createTaskColumn(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       {
         key: body.key,
@@ -137,14 +141,14 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listTaskColumns: async (c: Context<AppEnv>) => {
-    const rows = await service.listTaskColumns(c.get("user"), requiredParam(c, "projectId"));
+    const rows = await service.listTaskColumns(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
   },
 
   updateTaskColumn: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpdateColumnBody>(c);
     const row = await service.updateTaskColumn(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "columnId"),
       {
         title: body.title,
@@ -159,7 +163,7 @@ export const createCollabController = (service: CollabService) => ({
   createTask: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateTaskBody>(c);
     const row = await service.createTask(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       {
         columnId: body.column_id,
@@ -181,7 +185,7 @@ export const createCollabController = (service: CollabService) => ({
 
   listTasks: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ProjectTasksQuery>(c);
-    const result = await service.listTasksByProject(c.get("user"), requiredParam(c, "projectId"), {
+    const result = await service.listTasksByProject(actorFromContext(c), requiredParam(c, "projectId"), {
       page: q.page,
       limit: q.limit,
       columnId: q.column_id,
@@ -192,7 +196,7 @@ export const createCollabController = (service: CollabService) => ({
   updateTask: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpdateTaskBody>(c);
     const row = await service.updateTask(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "taskId"),
       {
         columnId: body.column_id,
@@ -214,7 +218,7 @@ export const createCollabController = (service: CollabService) => ({
 
   listInternalChat: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ChatMessageQuery>(c);
-    const result = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "internal", {
+    const result = await service.listChatMessages(actorFromContext(c), requiredParam(c, "projectId"), "internal", {
       page: q.page,
       limit: q.limit,
     });
@@ -224,7 +228,7 @@ export const createCollabController = (service: CollabService) => ({
   postInternalChat: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateChatMessageBody>(c);
     const row = await service.postChatMessage(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       "internal",
       body.body,
@@ -237,7 +241,7 @@ export const createCollabController = (service: CollabService) => ({
   markInternalChatRead: async (c: Context<AppEnv>) => {
     const body = validatedJson<MarkChatReadBody>(c);
     const row = await service.markChatAsRead(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       "internal",
       { upToMessageId: body.up_to_message_id, messageIds: body.message_ids ?? [] }
@@ -247,7 +251,7 @@ export const createCollabController = (service: CollabService) => ({
 
   listExternalChat: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ChatMessageQuery>(c);
-    const result = await service.listChatMessages(c.get("user"), requiredParam(c, "projectId"), "external", {
+    const result = await service.listChatMessages(actorFromContext(c), requiredParam(c, "projectId"), "external", {
       page: q.page,
       limit: q.limit,
     });
@@ -257,7 +261,7 @@ export const createCollabController = (service: CollabService) => ({
   postExternalChat: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateChatMessageBody>(c);
     const row = await service.postChatMessage(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       "external",
       body.body,
@@ -270,7 +274,7 @@ export const createCollabController = (service: CollabService) => ({
   markExternalChatRead: async (c: Context<AppEnv>) => {
     const body = validatedJson<MarkChatReadBody>(c);
     const row = await service.markChatAsRead(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       "external",
       { upToMessageId: body.up_to_message_id, messageIds: body.message_ids ?? [] }
@@ -279,24 +283,24 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listUnreadMentionNotifications: async (c: Context<AppEnv>) => {
-    const data = await service.listUnreadMentionNotifications(c.get("user"));
+    const data = await service.listUnreadMentionNotifications(actorFromContext(c));
     return c.json({ data }, 200);
   },
 
   countUnreadMentionNotifications: async (c: Context<AppEnv>) => {
-    const count = await service.countUnreadMentionNotifications(c.get("user"));
+    const count = await service.countUnreadMentionNotifications(actorFromContext(c));
     return c.json({ data: { unread_count: count } }, 200);
   },
 
   markMentionNotificationSeen: async (c: Context<AppEnv>) => {
-    const data = await service.markMentionNotificationSeen(c.get("user"), requiredParam(c, "notificationId"));
+    const data = await service.markMentionNotificationSeen(actorFromContext(c), requiredParam(c, "notificationId"));
     return c.json({ data }, 200);
   },
 
   createMinorChangeRequest: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateMinorChangeRequestBody>(c);
     const row = await service.createMinorChangeRequest(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       { taskId: body.task_id, title: body.title, description: body.description },
       { ipAddress: getIp(c), userAgent: getUa(c) }
@@ -307,7 +311,7 @@ export const createCollabController = (service: CollabService) => ({
   createFormalChangeRequest: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateFormalChangeRequestBody>(c);
     const row = await service.createFormalChangeRequest(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       {
         taskId: body.task_id,
@@ -323,7 +327,7 @@ export const createCollabController = (service: CollabService) => ({
   resolveChangeRequest: async (c: Context<AppEnv>) => {
     const body = validatedJson<ResolveChangeRequestBody>(c);
     const row = await service.resolveChangeRequest(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       requiredParam(c, "changeRequestId"),
       body.status,
@@ -334,7 +338,7 @@ export const createCollabController = (service: CollabService) => ({
 
   listFormalChangeLog: async (c: Context<AppEnv>) => {
     const q = validatedQuery<FormalChangeLogQuery>(c);
-    const result = await service.listFormalChangeLog(c.get("user"), requiredParam(c, "projectId"), {
+    const result = await service.listFormalChangeLog(actorFromContext(c), requiredParam(c, "projectId"), {
       page: q.page,
       limit: q.limit,
     });
@@ -343,7 +347,7 @@ export const createCollabController = (service: CollabService) => ({
 
   listFiles: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ProjectFilesQuery>(c);
-    const result = await service.listFiles(c.get("user"), requiredParam(c, "projectId"), {
+    const result = await service.listFiles(actorFromContext(c), requiredParam(c, "projectId"), {
       page: q.page,
       limit: q.limit,
     });
@@ -353,7 +357,7 @@ export const createCollabController = (service: CollabService) => ({
   uploadFileMetadata: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateFileBody>(c);
     const row = await service.uploadFileMetadata(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       {
         fileName: body.file_name,
@@ -379,9 +383,20 @@ export const createCollabController = (service: CollabService) => ({
   generateProjectFileUploadUrl: async (c: Context<AppEnv>) => {
     const body = validatedJson<GenerateUploadUrlBody>(c);
     const data = await service.generateProjectFileUploadUrl(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       { fileName: body.file_name, mimeType: body.mime_type, sizeBytes: body.size_bytes }
+    );
+    return c.json({ data }, 200);
+  },
+
+  abortUploadedFileObject: async (c: Context<AppEnv>) => {
+    const objectKey = c.req.query("objectKey")?.trim();
+    if (!objectKey) throw new AppError(400, "objectKey es requerido");
+    const data = await service.abortUnregisteredFileUpload(
+      actorFromContext(c),
+      requiredParam(c, "projectId"),
+      objectKey,
     );
     return c.json({ data }, 200);
   },
@@ -389,7 +404,7 @@ export const createCollabController = (service: CollabService) => ({
   approveFile: async (c: Context<AppEnv>) => {
     const body = validatedJson<ApproveFileBody>(c);
     const row = await service.approveFile(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "fileId"),
       body.approve,
       { ipAddress: getIp(c), userAgent: getUa(c) }
@@ -398,13 +413,13 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   getBrief: async (c: Context<AppEnv>) => {
-    const brief = await service.getBrief(c.get("user"), requiredParam(c, "projectId"));
+    const brief = await service.getBrief(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data: brief }, 200);
   },
 
   patchBrief: async (c: Context<AppEnv>) => {
     const body = validatedJson<BriefPatchBody>(c);
-    const brief = await service.patchBrief(c.get("user"), requiredParam(c, "projectId"), body.body, {
+    const brief = await service.patchBrief(actorFromContext(c), requiredParam(c, "projectId"), body.body, {
       ipAddress: getIp(c),
       userAgent: getUa(c),
     });
@@ -414,13 +429,13 @@ export const createCollabController = (service: CollabService) => ({
   // ─── Comentarios de tarea ────────────────────────────────────────────────
 
   listTaskComments: async (c: Context<AppEnv>) => {
-    const rows = await service.listTaskComments(c.get("user"), requiredParam(c, "taskId"));
+    const rows = await service.listTaskComments(actorFromContext(c), requiredParam(c, "taskId"));
     return c.json({ data: rows }, 200);
   },
 
   createTaskComment: async (c: Context<AppEnv>) => {
     const body = validatedJson<CreateTaskCommentBody>(c);
-    const user = c.get("user");
+    const user = actorFromContext(c);
     const comment = await service.createTaskComment(
       user,
       requiredParam(c, "taskId"),
@@ -434,12 +449,12 @@ export const createCollabController = (service: CollabService) => ({
   // ─── Archivos de tarea ───────────────────────────────────────────────────
 
   listTaskFiles: async (c: Context<AppEnv>) => {
-    const rows = await service.listTaskFiles(c.get("user"), requiredParam(c, "taskId"));
+    const rows = await service.listTaskFiles(actorFromContext(c), requiredParam(c, "taskId"));
     return c.json({ data: rows }, 200);
   },
 
   uploadTaskFileMetadata: async (c: Context<AppEnv>) => {
-    const user = c.get("user");
+    const user = actorFromContext(c);
     const projectId = requiredParam(c, "projectId");
     const taskId = requiredParam(c, "taskId");
     const body = validatedJson<CreateTaskFileMetadataBody>(c);
@@ -471,7 +486,7 @@ export const createCollabController = (service: CollabService) => ({
   generateTaskFileUploadUrl: async (c: Context<AppEnv>) => {
     const body = validatedJson<GenerateUploadUrlBody>(c);
     const data = await service.generateTaskFileUploadUrl(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "projectId"),
       requiredParam(c, "taskId"),
       { fileName: body.file_name, mimeType: body.mime_type, sizeBytes: body.size_bytes }
@@ -482,28 +497,32 @@ export const createCollabController = (service: CollabService) => ({
   downloadFile: async (c: Context<AppEnv>) => {
     const fileId = requiredParam(c, "fileId");
     const preview = c.req.query("preview") === "true";
-    const { file, url } = await service.getFileAccess(c.get("user"), fileId, !preview);
+    const { file, url } = await service.getFileAccess(actorFromContext(c), fileId, !preview);
     const upstream = await fetch(url);
     if (!upstream.ok) throw new AppError(502, "No se pudo obtener el archivo desde mod-media");
-    const bytes = new Uint8Array(await upstream.arrayBuffer());
+    if (!upstream.body) throw new AppError(502, "Respuesta de almacenamiento sin cuerpo");
+
     const disposition = preview ? "inline" : "attachment";
-    c.header("Content-Type", file.mimeType || "application/octet-stream");
-    c.header("Content-Disposition", `${disposition}; filename="${file.fileName}"`);
-    c.header("Content-Length", String(bytes.length));
-    c.header("Cache-Control", "no-store");
-    return c.newResponse(bytes, 200);
+    const headers = new Headers();
+    headers.set("Content-Type", file.mimeType || "application/octet-stream");
+    headers.set("Content-Disposition", formatContentDisposition(disposition, file.fileName));
+    const contentLength = upstream.headers.get("content-length");
+    if (contentLength) headers.set("Content-Length", contentLength);
+    headers.set("Cache-Control", "no-store");
+
+    return new Response(upstream.body, { status: 200, headers });
   },
 
   getFileAccess: async (c: Context<AppEnv>) => {
     const fileId = requiredParam(c, "fileId");
     const preview = c.req.query("preview") === "true";
-    const data = await service.getFileAccess(c.get("user"), fileId, !preview);
+    const data = await service.getFileAccess(actorFromContext(c), fileId, !preview);
     return c.json({ data }, 200);
   },
 
   deleteFile: async (c: Context<AppEnv>) => {
     const result = await service.deleteFile(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "fileId"),
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
@@ -513,7 +532,7 @@ export const createCollabController = (service: CollabService) => ({
   updateProjectFile: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpdateProjectFileBody>(c);
     const result = await service.updateProjectFile(
-      c.get("user"),
+      actorFromContext(c),
       requiredParam(c, "fileId"),
       {
         title: body.title,
@@ -527,18 +546,25 @@ export const createCollabController = (service: CollabService) => ({
   },
 
   listFilesWithTaskInfo: async (c: Context<AppEnv>) => {
-    const rows = await service.listFilesWithTaskInfo(c.get("user"), requiredParam(c, "projectId"));
+    const rows = await service.listFilesWithTaskInfo(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
   },
 
   listProjectTimeline: async (c: Context<AppEnv>) => {
-    const rows = await service.listProjectTimeline(c.get("user"), requiredParam(c, "projectId"));
+    const rows = await service.listProjectTimeline(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
   },
 
   listFilesTimeline: async (c: Context<AppEnv>) => {
-    const rows = await service.listProjectTimeline(c.get("user"), requiredParam(c, "projectId"));
+    const rows = await service.listProjectTimeline(actorFromContext(c), requiredParam(c, "projectId"));
     return c.json({ data: rows }, 200);
+  },
+
+  assertStoragePathAccess: async (c: Context<AppEnv>) => {
+    const storagePath = c.req.query("objectKey")?.trim();
+    if (!storagePath) throw new AppError(400, "objectKey es requerido");
+    await service.assertStoragePathAccess(actorFromContext(c), storagePath);
+    return c.body(null, 204);
   },
 
 });
