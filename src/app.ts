@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { env } from "./config/env";
+import { createGatewayRoutes } from "./gateway/gateway.routes";
 import { createOpenApiRoutes } from "./openapi/openapi.routes";
 import { collabModuleRoutes } from "./modules/collab/index";
 import { onError } from "./shared/middlewares/error-handler.middleware";
@@ -30,6 +31,7 @@ export const createApp = () => {
   }
 
   app.route("/", createOpenApiRoutes());
+  app.route("/", createGatewayRoutes());
 
   // --- API v1 routes ---
   const v1 = new Hono();

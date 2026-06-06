@@ -13,6 +13,7 @@ RUN pnpm install --prod --frozen-lockfile
 # Copy source code
 COPY src ./src
 COPY drizzle.config.ts ./
+COPY gateway ./gateway
 COPY openapi ./openapi
 
 # Create non-root user
