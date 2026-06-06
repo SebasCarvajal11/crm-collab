@@ -1,0 +1,23 @@
+import { Hono } from "hono";
+import { authMiddleware, type AppEnv } from "../../shared/middlewares/auth.middleware";
+import { collabWriteRateLimit } from "../../shared/middlewares/rate-limit.middleware";
+import { projectRoutes } from "./project/project.routes";
+import { memberRoutes } from "./member/member.routes";
+import { boardRoutes } from "./board/board.routes";
+import { chatRoutes } from "./chat/chat.routes";
+import { notificationRoutes } from "./notification/notification.routes";
+import { changeRequestRoutes } from "./change-request/change-request.routes";
+import { fileRoutes } from "./file/file.routes";
+import { briefRoutes } from "./brief/brief.routes";
+
+export const collabModuleRoutes = new Hono<AppEnv>();
+collabModuleRoutes.use("*", authMiddleware);
+collabModuleRoutes.use("*", collabWriteRateLimit());
+collabModuleRoutes.route("/", projectRoutes);
+collabModuleRoutes.route("/", memberRoutes);
+collabModuleRoutes.route("/", boardRoutes);
+collabModuleRoutes.route("/", chatRoutes);
+collabModuleRoutes.route("/", notificationRoutes);
+collabModuleRoutes.route("/", changeRequestRoutes);
+collabModuleRoutes.route("/", fileRoutes);
+collabModuleRoutes.route("/", briefRoutes);

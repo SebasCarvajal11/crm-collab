@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mod-collab:
     build:
@@ -11,14 +9,20 @@ services:
     environment:
       PORT: 3001
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${COLLAB_CONTAINER_DATABASE_URL:-postgresql://collab_user:collabpassword@postgres:5432/crm_database}
+      DB_SCHEMA: ${DB_SCHEMA:-schema_collab}
       MOD_COLLAB_CORS: ${MOD_COLLAB_CORS:-false}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
-      MOD_AUTH_URL: ${MOD_AUTH_URL:-http://host.docker.internal:3000}
-      MOD_MEDIA_URL: ${MOD_MEDIA_URL:-http://host.docker.internal:3002}
       GATEWAY_TRUST_SECRET: ${GATEWAY_TRUST_SECRET}
+      REDIS_URL: ${COLLAB_CONTAINER_REDIS_URL:-redis://redis:6379}
+      MEDIA_COMMANDS_STREAM_KEY: ${MEDIA_COMMANDS_STREAM_KEY:-media:commands}
+      MEDIA_RESPONSES_STREAM_KEY: ${MEDIA_RESPONSES_STREAM_KEY:-media:responses}
+      MEDIA_RESPONSES_CONSUMER_GROUP: ${MEDIA_RESPONSES_CONSUMER_GROUP:-collab-media-response-consumers}
+      MEDIA_COMMAND_TIMEOUT_MS: ${MEDIA_COMMAND_TIMEOUT_MS:-8000}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - cima-network
@@ -30,12 +34,26 @@ services:
       retries: 3
       start_period: 40s
 
+  redis:
+    image: redis:7-alpine
+    container_name: mod-collab-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - cima-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgres:
     image: postgres:16-alpine
     container_name: mod-collab-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-root}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rootpassword}
+      POSTGRES_USER: ${POSTGRES_USER:-collab_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-collabpassword}
       POSTGRES_DB: ${POSTGRES_DB:-crm_database}
     ports:
       - "5432:5432"
@@ -46,7 +64,7 @@ services:
       - cima-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-root} -d ${POSTGRES_DB:-crm_database}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-collab_user} -d ${POSTGRES_DB:-crm_database}"]
       interval: 10s
       timeout: 5s
       retries: 5

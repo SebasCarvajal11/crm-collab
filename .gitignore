@@ -1,31 +1,65 @@
+# Dependency directories
 node_modules/
+.pnpm-store/
+.yarn/
 .pnp
 .pnp.js
-.pnpm-store/
 
+# Build outputs
 dist/
 build/
 out/
 .tanstack/
-coverage/
+*.tsbuildinfo
 
+# Environment files
 .env
 .env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging.local
 .env.*.local
+.env.*
+!.env.example
+!.env.production.example
+
+# Keys and Certificates
 *.pem
 *.key
 cookies.jar
 
+# Logs
 logs/
 *.log
 *.out
 *.err
 *.pid
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
 .DS_Store
 Thumbs.db
-.idea/
+ehthumbs.db
+Desktop.ini
+
+# IDE and editors
 .vscode/
-*.tmp
-*.temp
-*.orig
-*.tsbuildinfo
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*~
+
+# Testing
+coverage/
+.nyc_output

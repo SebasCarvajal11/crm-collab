@@ -1,9 +1,9 @@
 import "dotenv/config";
 import { Pool } from "pg";
-import { env } from "../../config/env";
+import { pgConnectionConfig } from "../pg-config";
 import { ensureAuditLogPartitions } from "./ensure-audit-log-partitions";
 
-const pool = new Pool({ connectionString: env.DATABASE_URL });
+const pool = new Pool(pgConnectionConfig);
 
 try {
   await ensureAuditLogPartitions(pool);

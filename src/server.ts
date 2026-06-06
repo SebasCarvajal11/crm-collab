@@ -2,17 +2,31 @@ import { serve } from "@hono/node-server";
 import { env } from "./config/env";
 import { pool } from "./db/connection";
 import { ensureAuditLogPartitions } from "./db/scripts/ensure-audit-log-partitions";
-import { setupDefaultEventHandlers } from "./modules/collab/events";
+import { setupDefaultEventHandlers, getEventBus } from "./modules/collab/events";
+import { startAuthEventConsumer } from "./modules/collab/events/auth-event-handler";
+import { startMediaResponseConsumer, stopMediaResponseConsumer } from "./shared/media-command-client";
+import { closeRedisConnections } from "./shared/redis";
+import { getLogger } from "./shared/logger";
+
+const logger = getLogger();
 
 await ensureAuditLogPartitions(pool).catch((err) =>
-  console.error("[audit_logs] ensure partitions:", err),
+  logger.error({ err }, "[audit_logs] ensure partitions failed"),
 );
 
 const { createApp } = await import("./app");
 
 // Initialize event system
-setupDefaultEventHandlers();
-console.log("[mod-collab] Event system initialized");
+await setupDefaultEventHandlers();
+logger.info("[mod-collab] Event system initialized");
+
+// Initialize auth identity consumer (best-effort; survives without Redis)
+void startAuthEventConsumer().catch((err) =>
+  logger.error({ err }, "[mod-collab] Auth event consumer failed to start")
+);
+void startMediaResponseConsumer().catch((err) =>
+  logger.error({ err }, "[mod-collab] Media response consumer failed to start")
+);
 
 const app = createApp();
 
@@ -22,17 +36,22 @@ let isShuttingDown = false;
 const shutdown = async (signal: string) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  console.log(`[shutdown] ${signal}: cerrando recursos de mod-collab`);
+  logger.info({ signal }, "[shutdown] cerrando recursos de mod-collab");
 
   if (serverRef) {
     await new Promise<void>((resolve, reject) => {
       serverRef?.close((err) => (err ? reject(err) : resolve()));
-    }).catch((err) => console.error("[shutdown] server.close:", err));
+    }).catch((err) => logger.error({ err }, "[shutdown] server.close"));
     serverRef = null;
   }
 
-  await pool.end().catch((err) => console.error("[shutdown] pool.end:", err));
-  console.log("[shutdown] mod-collab finalizado");
+  await getEventBus().disconnect().catch((err) => logger.error({ err }, "[shutdown] eventBus.disconnect"));
+  const { stopAuthEventConsumer } = await import("./modules/collab/events/auth-event-handler");
+  await stopAuthEventConsumer().catch((err) => logger.error({ err }, "[shutdown] authEventConsumer.stop"));
+  await stopMediaResponseConsumer().catch((err) => logger.error({ err }, "[shutdown] mediaResponseConsumer.stop"));
+  await closeRedisConnections();
+  await pool.end().catch((err) => logger.error({ err }, "[shutdown] pool.end"));
+  logger.info("[shutdown] mod-collab finalizado");
 };
 
 const exitAfterShutdown = (signal: string) => {
@@ -48,7 +67,7 @@ serverRef = serve(
     port: env.PORT,
   },
   (info) => {
-    console.log(`mod-collab escuchando en http://localhost:${info.port}`);
-    console.log(`Entorno: ${env.NODE_ENV}`);
+    logger.info({ port: info.port }, "server started");
+    logger.info({ env: env.NODE_ENV }, "entorno");
   }
 );

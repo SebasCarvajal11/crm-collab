@@ -1,4 +1,4 @@
-import type { DbOrTx } from "../collab.repository";
+import type { DbOrTx } from "../shared/db.types";
 import { auditLogs } from "../../../db/schema";
 import type { AuditDetails } from "../collab.types";
 

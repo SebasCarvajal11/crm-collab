@@ -2,7 +2,7 @@
  * Seed de desarrollo — crea proyectos, tareas y datos de prueba realistas.
  * Uso: pnpm db:seed
  * 
- * IMPORTANTE: Ejecutar primero el seed de mod-auth para obtener los subjects de usuarios.
+ * IMPORTANTE: Hidratar primero schema_collab.user_identity_snapshots.
  */
 import "dotenv/config";
 import { db } from "./connection";
@@ -14,8 +14,9 @@ import {
   projectChatMessages,
   projectBriefs,
   projectChangeRequests,
+  userIdentitySnapshots,
 } from "./schema";
-import { sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 // Columnas por defecto para cada tipo de proyecto
 const CAMPAIGN_COLUMNS = [
@@ -486,29 +487,37 @@ Modernizar la imagen de marca para atraer público más joven sin perder la eleg
 async function seed() {
   console.log("🌱 Iniciando seed de mod-collab...\n");
 
-  // Primero, obtener usuarios de la base de datos de auth
-  // Como no tenemos acceso directo, usaremos UUIDs ficticios que representan a los usuarios
-  // En producción, esto debería sincronizarse con mod-auth
-  
-  // Obtener el admin actual de mod-auth mediante query directa
-  const authAdminResult = await db.execute(sql`
-    SELECT subject FROM schema_auth.users WHERE role = 'admin' LIMIT 1
-  `);
-  
-  const authWorkersResult = await db.execute(sql`
-    SELECT subject FROM schema_auth.users WHERE role = 'worker'
-  `);
-  
-  const authClientsResult = await db.execute(sql`
-    SELECT subject, email FROM schema_auth.users WHERE role = 'client'
-  `);
+  const [adminSnapshot] = await db
+    .select({
+      subject: userIdentitySnapshots.userSub,
+    })
+    .from(userIdentitySnapshots)
+    .where(eq(userIdentitySnapshots.role, "admin"))
+    .limit(1);
 
-  const adminSub = (authAdminResult.rows[0] as any)?.subject;
-  const workerSubs = (authWorkersResult.rows as any[]).map((r) => r.subject);
-  const clientData = (authClientsResult.rows as any[]).map((r) => ({ subject: r.subject, email: r.email }));
+  const workerSnapshots = await db
+    .select({
+      subject: userIdentitySnapshots.userSub,
+    })
+    .from(userIdentitySnapshots)
+    .where(eq(userIdentitySnapshots.role, "worker"));
+
+  const clientSnapshots = await db
+    .select({
+      subject: userIdentitySnapshots.userSub,
+      email: userIdentitySnapshots.email,
+    })
+    .from(userIdentitySnapshots)
+    .where(eq(userIdentitySnapshots.role, "client"));
+
+  const adminSub = adminSnapshot?.subject;
+  const workerSubs = workerSnapshots.map((r) => r.subject);
+  const clientData = clientSnapshots.map((r) => ({ subject: r.subject, email: r.email }));
 
   if (!adminSub) {
-    console.error("❌ No se encontró un admin en schema_auth.users. Ejecuta primero: pnpm db:seed en mod-auth");
+    console.error(
+      "❌ No se encontró un admin en schema_collab.user_identity_snapshots. Ejecuta primero: pnpm hydrate:identity-snapshots o espera la sincronización por eventos."
+    );
     process.exit(1);
   }
 

@@ -106,7 +106,7 @@ export const AssigneeSchema = z.object({
 });
 
 export const SubtaskSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().uuid(),
   title: z.string().min(1).max(255),
   is_completed: z.boolean().default(false),
   assignee_sub: z.string().uuid().nullable().optional(),
@@ -203,7 +203,7 @@ export const GenerateUploadUrlSchema = z.object({
 });
 
 export const BriefPatchSchema = z.object({
-  body: z.string().min(1).max(5000),
+  body: z.string().min(1).max(20000),
 });
 
 export const CreateMinorChangeRequestSchema = z.object({

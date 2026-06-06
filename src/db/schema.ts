@@ -135,7 +135,11 @@ export const projectTaskColumns = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [index("idx_project_task_columns_project_id").on(t.projectId)]
+  (t) => [
+    index("idx_project_task_columns_project_id").on(t.projectId),
+    uniqueIndex("uq_project_task_columns_project_key").on(t.projectId, t.key),
+    uniqueIndex("uq_project_task_columns_project_position").on(t.projectId, t.position),
+  ]
 );
 
 export const projectTasks = collabSchema.table(
@@ -392,6 +396,39 @@ export const auditLogs = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.id, t.createdAt] })]
+);
+
+export const userIdentitySnapshots = collabSchema.table(
+  "user_identity_snapshots",
+  {
+    userSub: uuid("user_sub").primaryKey(),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: varchar("role", { length: 20 }).notNull(),
+    firstName: varchar("first_name", { length: 120 }),
+    lastName: varchar("last_name", { length: 120 }),
+    clientKind: varchar("client_kind", { length: 20 }),
+    companyName: varchar("company_name", { length: 160 }),
+    profession: varchar("profession", { length: 160 }),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [index("idx_user_identity_snapshots_email").on(t.email)]
+);
+
+export const mediaAccessCache = collabSchema.table(
+  "media_access_cache",
+  {
+    objectKey: text("object_key").notNull(),
+    forceDownload: boolean("force_download").notNull(),
+    url: text("url").notNull(),
+    expiresAt: timestamp("expires_at", { mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.objectKey, t.forceDownload] }),
+    index("idx_media_access_cache_expires_at").on(t.expiresAt),
+  ],
 );
 
 export const projectsRelations = relations(projects, ({ many }) => ({

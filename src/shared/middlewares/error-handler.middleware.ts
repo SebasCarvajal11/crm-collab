@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { ZodError } from "zod";
 import { env } from "../../config/env";
+import { getLogger } from "../logger";
 
 export class AppError extends Error {
   constructor(
@@ -57,13 +58,21 @@ export const onError = (err: Error, c: Context): Response => {
     const detail = first ? `${first.path.join(".")}: ${first.message}` : "Datos inválidos";
     return c.json({ error: detail }, 400);
   }
-  console.error("[Unhandled Error]", c.req.method, c.req.path, err.message);
-  if (env.NODE_ENV === "development" && err.stack) {
-    console.error(err.stack);
-  }
+
+  const logger = c.get("requestLogger") ?? getLogger();
+  const traceId = c.get("traceId");
+
+  logger.error({
+    err,
+    traceId,
+    method: c.req.method,
+    path: c.req.path,
+    msg: "unhandled error",
+  });
+
   const body =
     env.NODE_ENV === "development"
-      ? { error: err.message || "Internal Server Error" }
-      : { error: "Internal Server Error" };
+      ? { error: err.message || "Internal Server Error", ...(traceId ? { traceId } : {}) }
+      : { error: "Internal Server Error", ...(traceId ? { traceId } : {}) };
   return c.json(body, 500);
 };

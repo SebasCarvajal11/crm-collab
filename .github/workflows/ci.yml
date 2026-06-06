@@ -37,5 +37,8 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Run unit tests
+        run: pnpm test:unit
+
       - name: Build production image
         run: docker build -t crm-collab:ci .
