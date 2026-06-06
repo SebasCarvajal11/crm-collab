@@ -17,6 +17,7 @@
     "hydrate:identity-snapshots": "tsx src/scripts/hydrate-identity-snapshots.ts",
     "dlq:auth:list": "tsx src/scripts/auth-events-dlq.ts list",
     "dlq:auth:replay": "tsx src/scripts/auth-events-dlq.ts replay",
+    "openapi:check": "node scripts/validate-openapi.mjs",
     "test:unit": "vitest run",
     "preinstall": "pnpm dlx only-allow pnpm"
   },
@@ -48,6 +49,7 @@
     "@types/pg": "^8.20.0",
     "@types/uuid": "^11.0.0",
     "drizzle-kit": "^0.31.10",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.8.3",
     "vitest": "^4.1.8"
   }

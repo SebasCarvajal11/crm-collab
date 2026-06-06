@@ -37,6 +37,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Validate OpenAPI contract
+        run: pnpm openapi:check
+
       - name: Run unit tests
         run: pnpm test:unit
 
