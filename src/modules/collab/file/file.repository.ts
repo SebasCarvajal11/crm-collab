@@ -9,18 +9,6 @@ export const createFileRepository = (conn: DbOrTx) => ({
     return row;
   },
 
-  listFilesByProject: async (projectId: string, isClientView: boolean) =>
-    conn
-      .select()
-      .from(projectFiles)
-      .where(
-        and(
-          eq(projectFiles.projectId, projectId),
-          isClientView ? eq(projectFiles.isClientVisible, true) : undefined
-        )
-      )
-      .orderBy(desc(projectFiles.createdAt)),
-
   findLatestVersion: async (projectId: string, fileName: string) => {
     const [row] = await conn
       .select()
@@ -43,13 +31,6 @@ export const createFileRepository = (conn: DbOrTx) => ({
   findFileById: async (fileId: string) => {
     const [row] = await conn.select().from(projectFiles).where(eq(projectFiles.id, fileId)).limit(1);
     return row ?? null;
-  },
-
-  listAllProjectFileStoragePaths: async () => {
-    const rows = await conn
-      .select({ storagePath: projectFiles.storagePath })
-      .from(projectFiles);
-    return rows.map((r) => r.storagePath);
   },
 
   findFileByStoragePath: async (storagePath: string) => {
