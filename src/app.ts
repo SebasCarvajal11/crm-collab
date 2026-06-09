@@ -139,7 +139,6 @@ export const createApp = () => {
   const authenticatedRoutes = new Hono<AppEnv>();
   authenticatedRoutes.use("*", authMiddleware);
   authenticatedRoutes.route("/api/v1/collab", collabModuleRoutes);
-  authenticatedRoutes.route("/collab", collabModuleRoutes); // legacy
   
   app.route("/", authenticatedRoutes);
 
