@@ -3,6 +3,7 @@ import type { AppEnv } from "./auth.middleware";
 import { AppError } from "./error-handler.middleware";
 import { getRedisConnection } from "../redis";
 import { getLogger } from "../logger";
+import { env } from "../../config/env";
 
 const logger = getLogger();
 
@@ -87,18 +88,18 @@ function collabRelativePath(path: string): string {
 function resolveWriteLimit(path: string, method: string): { maxAttempts: number; windowMs: number } {
   const route = collabRelativePath(path);
   if (method === "POST" && /\/chat\/(internal|external)$/.test(route)) {
-    return { maxAttempts: 40, windowMs: 60 * 1000 };
+    return { maxAttempts: env.RATE_LIMIT_COLLAB_CHAT_MAX, windowMs: env.RATE_LIMIT_COLLAB_CHAT_WINDOW_MS };
   }
   if (method === "POST" && route.endsWith("/files/upload-url")) {
-    return { maxAttempts: 40, windowMs: 15 * 60 * 1000 };
+    return { maxAttempts: env.RATE_LIMIT_COLLAB_FILE_UPLOAD_MAX, windowMs: env.RATE_LIMIT_COLLAB_FILE_UPLOAD_WINDOW_MS };
   }
   if (method === "POST" && (route.endsWith("/files/metadata") || route.endsWith("/files"))) {
-    return { maxAttempts: 40, windowMs: 15 * 60 * 1000 };
+    return { maxAttempts: env.RATE_LIMIT_COLLAB_FILE_UPLOAD_MAX, windowMs: env.RATE_LIMIT_COLLAB_FILE_UPLOAD_WINDOW_MS };
   }
   if (method === "POST" && route === "/projects") {
-    return { maxAttempts: 15, windowMs: 60 * 60 * 1000 };
+    return { maxAttempts: env.RATE_LIMIT_COLLAB_PROJECT_MAX, windowMs: env.RATE_LIMIT_COLLAB_PROJECT_WINDOW_MS };
   }
-  return { maxAttempts: 100, windowMs: 15 * 60 * 1000 };
+  return { maxAttempts: env.RATE_LIMIT_COLLAB_DEFAULT_MAX, windowMs: env.RATE_LIMIT_COLLAB_DEFAULT_WINDOW_MS };
 }
 
 /** Rate limit en mutaciones (POST/PUT/PATCH/DELETE) por usuario y ruta. */

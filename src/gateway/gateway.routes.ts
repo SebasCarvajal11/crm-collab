@@ -13,7 +13,7 @@ function resolveModuleRoot() {
   ];
 
   for (const candidate of candidates) {
-    if (existsSync(join(candidate, "gateway", "endpoints.json"))) {
+    if (existsSync(join(candidate, "gateway", "gateway.manifest.json"))) {
       return candidate;
     }
   }
@@ -24,10 +24,10 @@ function resolveModuleRoot() {
 export function createGatewayRoutes() {
   const routes = new Hono();
 
-  routes.get("/_gateway/endpoints.json", (c) => {
-    const path = join(resolveModuleRoot(), "gateway", "endpoints.json");
+  routes.get("/_gateway/gateway.manifest.json", (c) => {
+    const path = join(resolveModuleRoot(), "gateway", "gateway.manifest.json");
     if (!existsSync(path)) {
-      return c.json({ error: "No se encontro gateway/endpoints.json" }, 404);
+      return c.json({ error: "No se encontro gateway/gateway.manifest.json" }, 404);
     }
 
     const raw = readFileSync(path, "utf-8");

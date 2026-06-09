@@ -12,6 +12,14 @@
 - Depends on **Redis** for distributed event propagation (Redis Streams) and shared rate-limiting.
 - Must not duplicate auth logic, JWT issuance, or OCI binary-storage ownership that belongs elsewhere.
 
+## Fronteras con otros servicios
+
+- **Upstream**: `crm-auth` (para validar la firma de tokens JWT mediante su JWKS y para consumir eventos de identidad).
+- **Downstream**: `crm-media` (a través de comandos de manipulación de archivos y solicitud de pre-firmas) y `crm-frontend` (vistas de colaboración).
+- **Pares**: `crm-auth` (sincroniza snapshots de identidad), `crm-media` (interactúa enviando comandos a `stream:collab.media-commands` y recibiendo respuestas en `stream:media.asset-responses`).
+- **Recursos Compartidos**: PostgreSQL (`schema_collab` schema) y Redis (para subscripción a `stream:auth.identity`, publicación de `stream:collab.events` y comandos en `stream:collab.media-commands`).
+- **Fuera de mi responsabilidad**: Autenticación de usuarios, emisión de JWT, almacenamiento binario de archivos físicos en OCI Object Storage (responsabilidad de `crm-media`), escaneo de virus/malware.
+
 ## Architecture Rules
 
 - Preserve separation between transport, application logic, repositories, events, and infrastructure adapters.
@@ -63,3 +71,64 @@
 - Keep documentation minimal: only `README.md` and this file.
 - Preserve the gateway smoke test when changing external behavior, and extend it when RBAC or collaboration contracts change.
 - If future modules integrate with collaboration, document the boundary here instead of adding scattered operational notes.
+
+## Workers and Background Processes
+
+`crm-collab` manages one background worker process:
+
+1. **Collab Outbox Worker** (`pnpm worker:collab-outbox`): Polling publisher that processes collaboration outbox events.
+   - *Dependencies*: PostgreSQL (`schema_collab` schema, `collab_outbox` table), Redis (publishes to `stream:collab.events`).
+
+### Healthcheck and Graceful Shutdown
+- **Healthcheck**: The worker writes its status and dependencies health report to `/tmp/worker-healthy` every 15 seconds. Checked inside Docker using `docker-healthcheck.sh`.
+- **Graceful Shutdown (Draining)**: The worker handles `SIGINT` and `SIGTERM` signals. It stops the tick timer, releases the database and Redis clients, and then exits.
+
+## Configuration and Environment Variables
+
+- **Contract Source of Truth**: The sole source of truth for the service configuration contract is [.env.example](file:///D:/BACKUP CELULAR OLIMPO/crm-collab/.env.example). No production secrets or specific environment parameters should be committed.
+- **Fail-Fast Validation**: All environment variables are parsed and validated at startup using `src/config/env.ts`. The process will exit immediately with code 1 if any required environment variable is missing or malformed.
+- **Deployment Injection**: Production variables are injected dynamically from a secure orchestrator into `.env` or the container environment at deployment time.
+
+
+## Testing Levels and Isolation
+
+- **Nivel 1: Pruebas Unitarias** (`pnpm test:unit`): Pruebas unitarias que validan la lógica interna del dominio de colaboración sin requerir bases de datos, Redis ni dependencias de red. Se ejecutan de forma aislada en el pipeline del repositorio.
+- **Nivel 2: Pruebas de Contrato Local**: Pruebas de integración locales que requieren únicamente la base de datos (esquema `schema_collab`) y Redis local, sin levantar `crm-auth` ni otros microservicios.
+- **Nivel 3: Pruebas de Integración Cruzada**: Pruebas Hurl (e.g. `01_gateway_rbac_collab.hurl`) que validan la interoperabilidad y enrutamiento con el API Gateway y requieren que `crm-auth` y `crm-collab` estén ejecutándose simultáneamente. Son orquestadas a nivel de plataforma por `crm-infra` en la suite global de pruebas de contrato.
+
+
+## Database Schema Migration Procedure (Expand & Contract)
+
+To ensure zero-downtime deployments where old and new versions of a service run concurrently (such as during Blue/Green deployments), database migrations must never contain breaking changes:
+
+1. **Non-Breaking Changes Only**: Every migration must be backward-compatible. Do not rename columns, remove columns, or add non-nullable columns without default values.
+2. **Adding a Column (Expand)**:
+   - Add the column as nullable or with a default value.
+   - Deploy the new service version to write to both the old and new columns, or migrate data in the background.
+3. **Changing a Column/Type**:
+   - Create a new column with the target type.
+   - Update the code to read/write to both columns.
+   - Run a background script to backfill data from the old column to the new column.
+   - Update the code to read from the new column only.
+4. **Removing/Renaming a Column (Contract)**:
+   - Mark the column as deprecated in the schema code (e.g., comments).
+   - Deploy code that does not reference the old column name.
+   - Once the old code is completely retired, run a cleanup migration to drop/rename the column.
+
+## Observabilidad
+
+- **Health**: `GET /health` — estado de DB y Redis. Devuelve `{ status, version, uptimeSec, dependencies }`.
+- **Métricas**: `GET /metrics` — Prometheus text/plain (prom-client). Incluye:
+  - `http_requests_total`, `http_request_duration_seconds`, `http_errors_5xx_total`
+  - `worker_outbox_depth{worker="collab-outbox"}` — pendientes en `collab_outbox` DB
+  - Métricas de Node.js por defecto (heap, event loop lag, GC)
+- **Logs**: pino → Loki via promtail (label `service=crm-collab`)
+- **Dashboard**: Grafana http://localhost:13000 → "CIMA CRM — Overview"
+
+## Patrones retirados
+
+| Patrón | Retirado | Motivo |
+|--------|----------|--------|
+| `GATEWAY_TRUST_SECRET` / `gatewayTrustMiddleware` | 2026-05-15 | Eliminado; validación JWKS directa |
+| `MEDIA_COMMAND_SECRET` (HMAC) | 2026-06-01 | Reemplazado por JWT de servicio firmado con clave RSA por par |
+| `crm-bff` como downstream | 2026-06-01 | `crm-bff` fue eliminado del stack |

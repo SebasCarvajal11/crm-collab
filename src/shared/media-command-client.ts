@@ -1,11 +1,16 @@
-import { createHmac, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import { and, eq, gt, sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { db } from "../db/connection";
 import { mediaAccessCache } from "../db/schema";
 import { getRedisConnection, getRedisSubscriber } from "./redis";
 import { AppError } from "./middlewares/error-handler.middleware";
-import { getLogger } from "./logger";
+import { getLogger, traceStorage } from "./logger";
+import { signServiceJwt } from "../config/jwt";
+import {
+  mediaResponseSchema,
+  type MediaResponse,
+} from "@sebascarvajal11/cima-contracts/media-asset-events";
 
 const logger = getLogger();
 
@@ -19,6 +24,7 @@ export type MediaCommandActor = {
 type UnsignedMediaCommandRequest =
   | {
       type: "file.upload-url-requested";
+      traceId?: string;
       correlationId: string;
       requestedAt: string;
       actor: MediaCommandActor;
@@ -29,6 +35,7 @@ type UnsignedMediaCommandRequest =
     }
   | {
       type: "file.metadata-requested";
+      traceId?: string;
       correlationId: string;
       requestedAt: string;
       actor: MediaCommandActor;
@@ -39,6 +46,7 @@ type UnsignedMediaCommandRequest =
     }
   | {
       type: "file.access-requested";
+      traceId?: string;
       correlationId: string;
       requestedAt: string;
       actor: MediaCommandActor;
@@ -47,6 +55,7 @@ type UnsignedMediaCommandRequest =
     }
   | {
       type: "file.delete-requested";
+      traceId?: string;
       correlationId: string;
       requestedAt: string;
       actor: MediaCommandActor;
@@ -60,6 +69,8 @@ type MediaCommandRequest = UnsignedMediaCommandRequest & {
 type MediaCommandResponse =
   | {
       type: "file.upload-url-created";
+      version: number;
+      contractVersion: number;
       correlationId: string;
       objectKey: string;
       uploadUrl: string;
@@ -67,6 +78,8 @@ type MediaCommandResponse =
     }
   | {
       type: "file.metadata-resolved";
+      version: number;
+      contractVersion: number;
       correlationId: string;
       objectKey: string;
       sizeBytes: number;
@@ -74,6 +87,8 @@ type MediaCommandResponse =
     }
   | {
       type: "file.access-granted";
+      version: number;
+      contractVersion: number;
       correlationId: string;
       objectKey: string;
       url: string;
@@ -81,11 +96,15 @@ type MediaCommandResponse =
     }
   | {
       type: "file.deleted";
+      version: number;
+      contractVersion: number;
       correlationId: string;
       objectKey: string;
     }
   | {
       type: "file.command-failed";
+      version: number;
+      contractVersion: number;
       correlationId: string;
       objectKey?: string;
       statusCode: number;
@@ -272,13 +291,19 @@ export async function deleteDocumentInMedia(actor: MediaCommandActor, objectKey:
 }
 
 async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<MediaCommandResponse> {
+  if (!mediaCircuitBreaker.checkCall()) {
+    throw new AppError(503, "El circuito esta abierto: el servicio crm-media no esta disponible");
+  }
+
   const redis = getRedisConnection();
   if (!redis) {
+    mediaCircuitBreaker.recordFailure();
     throw new AppError(503, "Redis no disponible para comandos de media");
   }
 
   await startMediaResponseConsumer();
   if (!responseLoopRunning) {
+    mediaCircuitBreaker.recordFailure();
     throw new AppError(503, "Consumidor de respuestas de media no disponible");
   }
 
@@ -291,6 +316,11 @@ async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<M
     pendingResponses.set(command.correlationId, { resolve, reject, timer });
   });
 
+  const store = traceStorage.getStore();
+  if (store?.traceId) {
+    command.traceId = store.traceId;
+  }
+
   const signedCommand = signMediaCommand(command);
 
   try {
@@ -300,8 +330,18 @@ async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<M
       "payload",
       JSON.stringify(signedCommand),
     );
-    return await promise;
+    const res = await promise;
+
+    if (res.type === "file.command-failed" && res.statusCode >= 500) {
+      mediaCircuitBreaker.recordFailure();
+    } else {
+      mediaCircuitBreaker.recordSuccess();
+    }
+
+    return res;
   } catch (error) {
+    mediaCircuitBreaker.recordFailure();
+
     const pending = pendingResponses.get(command.correlationId);
     if (pending) {
       clearTimeout(pending.timer);
@@ -312,38 +352,19 @@ async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<M
 }
 
 function signMediaCommand(command: UnsignedMediaCommandRequest): MediaCommandRequest {
-  const signature = createHmac("sha256", env.GATEWAY_TRUST_SECRET)
-    .update(mediaCommandSigningPayload(command))
-    .digest("hex");
-  return { ...command, signature };
-}
-
-function mediaCommandSigningPayload(command: UnsignedMediaCommandRequest): string {
-  return JSON.stringify({
-    type: command.type,
+  const now = Math.floor(Date.now() / 1000);
+  const jwtPayload = {
+    iss: "crm-collab",
+    aud: "crm-media",
+    purpose: "media.command",
     correlationId: command.correlationId,
-    requestedAt: command.requestedAt,
+    commandType: command.type,
     objectKey: command.objectKey,
-    forceDownload: command.type === "file.access-requested" ? command.forceDownload : undefined,
-    fileName:
-      command.type === "file.upload-url-requested" || command.type === "file.metadata-requested"
-        ? command.fileName
-        : undefined,
-    mimeType:
-      command.type === "file.upload-url-requested" || command.type === "file.metadata-requested"
-        ? command.mimeType
-        : undefined,
-    sizeBytes:
-      command.type === "file.upload-url-requested" || command.type === "file.metadata-requested"
-        ? command.sizeBytes
-        : undefined,
-    actor: {
-      sub: command.actor.sub,
-      userId: command.actor.userId,
-      role: command.actor.role,
-      email: command.actor.email,
-    },
-  });
+    iat: now,
+    exp: now + 60,
+  };
+  const signature = signServiceJwt(jwtPayload);
+  return { ...command, signature };
 }
 
 async function readMediaResponses(redis: NonNullable<ReturnType<typeof getRedisSubscriber>>) {
@@ -380,17 +401,34 @@ async function readMediaResponses(redis: NonNullable<ReturnType<typeof getRedisS
 
           let response: MediaCommandResponse | null = null;
           try {
-            response = JSON.parse(payload) as MediaCommandResponse;
+            const raw = JSON.parse(payload);
+            const result = mediaResponseSchema.safeParse(raw);
+            if (result.success) {
+              response = result.data as MediaCommandResponse;
+            } else {
+              logger.warn(
+                { messageId, issues: result.error.issues },
+                "[media-command-client] Respuesta de media no cumple schema",
+              );
+            }
           } catch {
-            logger.warn({ messageId }, "[media-command-client] Respuesta invalida");
+            logger.warn({ messageId }, "[media-command-client] Respuesta invalida (JSON parse error)");
           }
 
           if (response?.correlationId) {
-            const pending = pendingResponses.get(response.correlationId);
-            if (pending) {
-              clearTimeout(pending.timer);
-              pendingResponses.delete(response.correlationId);
-              pending.resolve(response);
+            const traceId = (response as any).traceId;
+            const action = async () => {
+              const pending = pendingResponses.get(response!.correlationId);
+              if (pending) {
+                clearTimeout(pending.timer);
+                pendingResponses.delete(response!.correlationId);
+                pending.resolve(response!);
+              }
+            };
+            if (traceId) {
+              await traceStorage.run({ traceId }, action);
+            } else {
+              await action();
             }
           }
 
@@ -462,3 +500,88 @@ function commandFailureToAppError(response: MediaCommandResponse): AppError {
   }
   return new AppError(response.statusCode, response.message);
 }
+
+// ── Circuit Breaker ──────────────────────────────────────────────────────────
+
+export class SimpleCircuitBreaker {
+  private state: "CLOSED" | "OPEN" | "HALF_OPEN" = "CLOSED";
+  private failures: number[] = [];
+  private successes: number[] = [];
+  private lastStateChange: number = Date.now();
+
+  constructor(
+    private thresholdRate = 0.5,
+    private windowMs = 60000,
+    private cooldownMs = 10000,
+    private minRequests = 5,
+  ) {}
+
+  public getState() {
+    return this.state;
+  }
+
+  public getCooldownMs() {
+    return this.cooldownMs;
+  }
+
+
+  public checkCall(): boolean {
+    const now = Date.now();
+    this.cleanOldMetrics(now);
+
+    if (this.state === "OPEN") {
+      if (now - this.lastStateChange >= this.cooldownMs) {
+        this.transitionTo("HALF_OPEN", now);
+        return true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  public recordSuccess(): void {
+    const now = Date.now();
+    if (this.state === "HALF_OPEN") {
+      this.transitionTo("CLOSED", now);
+      this.failures = [];
+      this.successes = [];
+    } else if (this.state === "CLOSED") {
+      this.successes.push(now);
+    }
+  }
+
+  public recordFailure(): void {
+    const now = Date.now();
+    if (this.state === "HALF_OPEN" || this.state === "CLOSED") {
+      this.failures.push(now);
+      this.checkFailureRate(now);
+    }
+  }
+
+  private transitionTo(newState: "CLOSED" | "OPEN" | "HALF_OPEN", now: number) {
+    logger.warn({ from: this.state, to: newState, topic: "circuit-breaker" }, `Circuit breaker state transition`);
+    this.state = newState;
+    this.lastStateChange = now;
+  }
+
+  private cleanOldMetrics(now: number) {
+    const limit = now - this.windowMs;
+    this.failures = this.failures.filter((t) => t > limit);
+    this.successes = this.successes.filter((t) => t > limit);
+  }
+
+  private checkFailureRate(now: number) {
+    this.cleanOldMetrics(now);
+    const total = this.failures.length + this.successes.length;
+    if (this.state === "HALF_OPEN") {
+      this.transitionTo("OPEN", now);
+    } else if (this.state === "CLOSED" && total >= this.minRequests) {
+      const rate = this.failures.length / total;
+      if (rate >= this.thresholdRate) {
+        this.transitionTo("OPEN", now);
+      }
+    }
+  }
+}
+
+export const mediaCircuitBreaker = new SimpleCircuitBreaker();

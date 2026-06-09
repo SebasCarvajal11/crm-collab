@@ -5,43 +5,14 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-collab-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.1.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Validate OpenAPI contract
-        run: pnpm openapi:check
-
-      - name: Run unit tests
-        run: pnpm test:unit
-
-      - name: Build production image
-        run: docker build -t crm-collab:ci .
+  validate:
+    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-ci.yml@main
+    with:
+      component: collab
+      test_command: pnpm test:unit
+    secrets: inherit

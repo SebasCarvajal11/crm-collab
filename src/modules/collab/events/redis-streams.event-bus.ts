@@ -1,8 +1,12 @@
 import type Redis from "ioredis";
 import type { CollabEvent, CollabEventType, CollabEventPayload } from "./event.types";
 import type { EventBus, EventHandler } from "./event-bus.port";
+import { COLLAB_EVENT_CONTRACT_VERSION } from "@sebascarvajal11/cima-contracts/collab-project-events";
 import { env } from "../../../config/env";
-import { getLogger } from "../../../shared/logger";
+import { getLogger, traceStorage } from "../../../shared/logger";
+import { db } from "../../../db/connection";
+import { createCollabOutboxRepository } from "./collab-outbox.repository";
+import { getRedisConnection } from "../../../shared/redis";
 
 const logger = getLogger();
 
@@ -43,29 +47,31 @@ export class RedisStreamsEventBus implements EventBus {
     eventType: CollabEventType,
     projectId: string,
     actorSub: string,
-    data: T
+    data: T,
+    tx?: any
   ): Promise<void> {
+    const store = traceStorage.getStore();
     const event: CollabEvent<T> = {
+      version: 1,
+      contractVersion: COLLAB_EVENT_CONTRACT_VERSION,
       type: eventType,
       projectId,
       actorSub,
       timestamp: new Date(),
       data,
+      traceId: store?.traceId,
+      correlationId: store?.correlationId,
     };
 
-    // Publish to Redis Stream (best-effort)
     try {
-      await this.publisher.xadd(
-        this.streamKey,
-        "*",
-        "payload",
-        JSON.stringify(event)
-      );
+      const conn = tx || db;
+      const repository = createCollabOutboxRepository(conn);
+      await repository.createCollabOutboxEvent(eventType, projectId, event as any);
     } catch (err) {
-      logger.error({ err, eventType }, `[RedisStreamsEventBus] Failed to publish ${eventType}`);
+      logger.error({ err, eventType }, `[RedisStreamsEventBus] Failed to save outbox event ${eventType}`);
+      throw err;
     }
 
-    // Also dispatch locally immediately for low-latency side-effects on the emitting node
     await this.dispatchLocal(event as CollabEvent<CollabEventPayload>);
   }
 
@@ -191,12 +197,37 @@ export class RedisStreamsEventBus implements EventBus {
     const specificHandlers = this.handlers.get(event.type) || [];
     const allHandlers = [...specificHandlers, ...this.globalHandlers];
 
-    await Promise.allSettled(
-      allHandlers.map((handler) =>
-        Promise.resolve(handler(event)).catch((err) => {
-          logger.error({ err, eventType: event.type }, `[RedisStreamsEventBus] Error in handler for ${event.type}`);
-        })
-      )
-    );
+    const traceId = event.traceId || `evt-${event.type}-${Date.now()}`;
+    const correlationId = event.correlationId;
+    const version = event.version ?? 1;
+
+    await traceStorage.run({ traceId, correlationId }, async () => {
+      const results = await Promise.allSettled(
+        allHandlers.map((handler) => Promise.resolve(handler(event)))
+      );
+
+      const failed = results.filter((r) => r.status === "rejected");
+      const conn = getRedisConnection();
+      if (conn) {
+        if (failed.length > 0) {
+          await conn.hincrby("metrics:events:processed_failed", `${event.type}:v${version}`, 1)
+            .catch((err) => logger.warn({ err }, "No se pudo incrementar metrica de evento procesado con error en Redis"));
+        } else {
+          await conn.hincrby("metrics:events:processed", `${event.type}:v${version}`, 1)
+            .catch((err) => logger.warn({ err }, "No se pudo incrementar metrica de evento procesado en Redis"));
+        }
+      }
+
+      logger.info(
+        { eventType: event.type, eventVersion: version, topic: "event-metrics", success: failed.length === 0 },
+        `Métrica de evento procesado: ${event.type} v${version} (success: ${failed.length === 0})`
+      );
+
+      results.forEach((r, idx) => {
+        if (r.status === "rejected") {
+          logger.error({ err: r.reason, eventType: event.type }, `[RedisStreamsEventBus] Error in handler for ${event.type}`);
+        }
+      });
+    });
   }
 }

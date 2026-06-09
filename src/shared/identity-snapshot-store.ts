@@ -1,6 +1,14 @@
 import { inArray, eq, sql } from "drizzle-orm";
 import { db } from "../db/connection";
-import { userIdentitySnapshots } from "../db/schema";
+import {
+  userIdentitySnapshots,
+  projectMembers,
+  projectChatMessages,
+  projectFiles,
+  projectTaskAssignees,
+  projectTaskComments,
+  projectMentionNotifications,
+} from "../db/schema";
 import { getLogger } from "./logger";
 
 const logger = getLogger();
@@ -119,6 +127,11 @@ export async function getUserProfilesFromSnapshots(
   }
 }
 
+/**
+ * Inserta o actualiza un snapshot de identidad de usuario de forma idempotente.
+ * Mapea explícitamente los campos esperados para garantizar que cualquier propiedad o campo
+ * adicional/desconocido enviado en los payloads de eventos sea filtrado e ignorado con éxito.
+ */
 export async function upsertUserIdentitySnapshot(
   snapshot: UserIdentitySnapshotInput,
 ): Promise<void> {
@@ -161,4 +174,45 @@ export async function deleteUserIdentitySnapshot(userSub: string): Promise<void>
   await db
     .delete(userIdentitySnapshots)
     .where(eq(userIdentitySnapshots.userSub, userSub));
+}
+
+export async function anonymizeUserPII(userSub: string): Promise<void> {
+  const anonEmail = `anon-${userSub}@cima.internal`;
+
+  await db.transaction(async (tx) => {
+    profileCache.delete(userSub);
+    await tx
+      .delete(userIdentitySnapshots)
+      .where(eq(userIdentitySnapshots.userSub, userSub));
+
+    await tx
+      .update(projectMembers)
+      .set({ userEmail: anonEmail })
+      .where(eq(projectMembers.userSub, userSub));
+
+    await tx
+      .update(projectChatMessages)
+      .set({ authorEmail: anonEmail })
+      .where(eq(projectChatMessages.authorSub, userSub));
+
+    await tx
+      .update(projectFiles)
+      .set({ createdByEmail: anonEmail })
+      .where(eq(projectFiles.createdBySub, userSub));
+
+    await tx
+      .update(projectTaskAssignees)
+      .set({ userEmail: anonEmail })
+      .where(eq(projectTaskAssignees.userSub, userSub));
+
+    await tx
+      .update(projectTaskComments)
+      .set({ authorEmail: anonEmail })
+      .where(eq(projectTaskComments.authorSub, userSub));
+
+    await tx
+      .update(projectMentionNotifications)
+      .set({ authorEmail: anonEmail })
+      .where(eq(projectMentionNotifications.authorSub, userSub));
+  });
 }

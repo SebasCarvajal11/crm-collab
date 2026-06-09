@@ -1,5 +1,6 @@
 import type { CollabEvent, CollabEventType, CollabEventPayload } from "./event.types";
 import type { EventBus, EventHandler } from "./event-bus.port";
+import { COLLAB_EVENT_CONTRACT_VERSION } from "@sebascarvajal11/cima-contracts/collab-project-events";
 import { getLogger } from "../../../shared/logger";
 
 const logger = getLogger();
@@ -22,9 +23,12 @@ export class InMemoryEventBus implements EventBus {
     eventType: CollabEventType,
     projectId: string,
     actorSub: string,
-    data: T
+    data: T,
+    tx?: any
   ): Promise<void> {
     const event: CollabEvent<T> = {
+      version: 1,
+      contractVersion: COLLAB_EVENT_CONTRACT_VERSION,
       type: eventType,
       projectId,
       actorSub,

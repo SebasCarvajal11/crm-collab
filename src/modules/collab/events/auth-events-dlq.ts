@@ -1,4 +1,6 @@
 import { env } from "../../../config/env";
+import { getRedisConnection } from "../../../shared/redis";
+import { getLogger } from "../../../shared/logger";
 
 type RedisClient = {
   xadd: (...args: any[]) => Promise<string | null>;
@@ -150,4 +152,48 @@ function parseDlqEntry(id: string, fields: string[]): AuthEventDlqEntry {
     payload: map.payload,
     rawFields,
   };
+}
+
+const logger = getLogger();
+let replayerInterval: NodeJS.Timeout | null = null;
+
+export function startAuthDlqReplayer(): void {
+  const intervalMs = env.DLQ_AUTO_REPLAY_INTERVAL_MS;
+  if (!intervalMs || intervalMs <= 0) {
+    logger.info("[auth-dlq-replayer] Auto-replay deshabilitado");
+    return;
+  }
+
+  logger.info({ intervalMs }, "[auth-dlq-replayer] Iniciando auto-replay de DLQ");
+
+  replayerInterval = setInterval(async () => {
+    const redis = getRedisConnection();
+    if (!redis) return;
+
+    try {
+      const entries = await listAuthEventDlqEntries(redis, 10);
+      if (entries.length === 0) return;
+
+      logger.info({ count: entries.length }, "[auth-dlq-replayer] Reintentando entradas DLQ");
+
+      for (const entry of entries) {
+        try {
+          await replayAuthEventDlqEntry(redis, entry.id);
+          logger.info({ dlqId: entry.id }, "[auth-dlq-replayer] Entrada DLQ reinyectada y removida con exito");
+        } catch (err) {
+          logger.error({ dlqId: entry.id, err }, "[auth-dlq-replayer] Error reinyectando entrada DLQ");
+        }
+      }
+    } catch (err) {
+      logger.error({ err }, "[auth-dlq-replayer] Error en ciclo de auto-replay");
+    }
+  }, intervalMs);
+}
+
+export function stopAuthDlqReplayer(): void {
+  if (replayerInterval) {
+    clearInterval(replayerInterval);
+    replayerInterval = null;
+    logger.info("[auth-dlq-replayer] Auto-replay detenido");
+  }
 }

@@ -50,8 +50,15 @@ export async function setupDefaultEventHandlers(): Promise<void> {
 }
 
 async function logAllEvents(event: CollabEvent<CollabEventPayload>): Promise<void> {
+  const timestampStr =
+    event.timestamp instanceof Date
+      ? event.timestamp.toISOString()
+      : typeof event.timestamp === "string"
+      ? new Date(event.timestamp).toISOString()
+      : new Date().toISOString();
+
   logger.info(
-    { type: event.type, projectId: event.projectId, actorSub: event.actorSub, timestamp: event.timestamp.toISOString() },
+    { type: event.type, projectId: event.projectId, actorSub: event.actorSub, timestamp: timestampStr },
     `Event ${event.type}`
   );
 }

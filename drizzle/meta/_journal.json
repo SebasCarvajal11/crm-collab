@@ -5,15 +5,22 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1778382942489,
-      "tag": "0000_peaceful_thunderbolts",
+      "when": 1780787093042,
+      "tag": "0000_daffy_captain_midlands",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1778461200000,
-      "tag": "0002_oci_object_storage",
+      "when": 1780811404029,
+      "tag": "0001_tidy_firebrand",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780876676369,
+      "tag": "0002_thick_harry_osborn",
       "breakpoints": true
     }
   ]

@@ -516,7 +516,7 @@ async function seed() {
 
   if (!adminSub) {
     console.error(
-      "❌ No se encontró un admin en schema_collab.user_identity_snapshots. Ejecuta primero: pnpm hydrate:identity-snapshots o espera la sincronización por eventos."
+      "❌ No se encontró un admin en schema_collab.user_identity_snapshots. Espera a que la sincronización por eventos (stream:auth.identity) complete o ejecuta el seed de crm-auth primero."
     );
     process.exit(1);
   }

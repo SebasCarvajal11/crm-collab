@@ -1,78 +1,62 @@
 services:
-  mod-collab:
+  crm-collab:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mod-collab
-    ports:
-      - "3001:3001"
+    restart: unless-stopped
+    env_file:
+      - .env
     environment:
+      CONTAINER_MODE: server
+      DATABASE_URL: postgresql://collab_user:${COLLAB_DB_PASSWORD:-collabpassword}@postgres_db:5432/crm_database
+      DB_SCHEMA: schema_collab
       PORT: 3001
-      NODE_ENV: production
-      DATABASE_URL: ${COLLAB_CONTAINER_DATABASE_URL:-postgresql://collab_user:collabpassword@postgres:5432/crm_database}
-      DB_SCHEMA: ${DB_SCHEMA:-schema_collab}
-      MOD_COLLAB_CORS: ${MOD_COLLAB_CORS:-false}
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
-      GATEWAY_TRUST_SECRET: ${GATEWAY_TRUST_SECRET}
-      REDIS_URL: ${COLLAB_CONTAINER_REDIS_URL:-redis://redis:6379}
-      MEDIA_COMMANDS_STREAM_KEY: ${MEDIA_COMMANDS_STREAM_KEY:-media:commands}
-      MEDIA_RESPONSES_STREAM_KEY: ${MEDIA_RESPONSES_STREAM_KEY:-media:responses}
-      MEDIA_RESPONSES_CONSUMER_GROUP: ${MEDIA_RESPONSES_CONSUMER_GROUP:-collab-media-response-consumers}
-      MEDIA_COMMAND_TIMEOUT_MS: ${MEDIA_COMMAND_TIMEOUT_MS:-8000}
+      REDIS_URL: redis://redis:6379
+      REDIS_STREAMS_KEY: stream:collab.events
+      REDIS_CONSUMER_GROUP: group:collab.events
+      AUTH_EVENTS_STREAM_KEY: stream:auth.identity
+      AUTH_EVENTS_CONSUMER_GROUP: group:collab.auth-identity
+      AUTH_EVENTS_MAX_RETRIES: 3
+      AUTH_EVENTS_PENDING_IDLE_MS: 30000
+      COLLAB_EVENTS_DLQ_STREAM_KEY: stream:collab.identity-dlq
+      MEDIA_COMMANDS_STREAM_KEY: stream:collab.media-commands
+      MEDIA_RESPONSES_STREAM_KEY: stream:media.asset-responses
+      MEDIA_RESPONSES_CONSUMER_GROUP: group:collab.media-responses
+      MEDIA_COMMAND_TIMEOUT_MS: 8000
     depends_on:
-      postgres:
+      postgres_db:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
-      - cima-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      shared_backplane:
+        aliases:
+          - collab
 
-  redis:
-    image: redis:7-alpine
-    container_name: mod-collab-redis
-    ports:
-      - "6379:6379"
-    networks:
-      - cima-network
+  crm-collab-outbox-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: mod-collab-postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-collab_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-collabpassword}
-      POSTGRES_DB: ${POSTGRES_DB:-crm_database}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./drizzle:/docker-entrypoint-initdb.d
+      CONTAINER_MODE: worker
+      DATABASE_URL: postgresql://collab_user:${COLLAB_DB_PASSWORD:-collabpassword}@postgres_db:5432/crm_database
+      DB_SCHEMA: schema_collab
+      REDIS_URL: redis://redis:6379
+      REDIS_STREAMS_KEY: stream:collab.events
+      COLLAB_OUTBOX_INTERVAL_MS: 5000
+      COLLAB_OUTBOX_BATCH_SIZE: 50
+    command: ["pnpm", "worker:collab-outbox"]
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
-      - cima-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-collab_user} -d ${POSTGRES_DB:-crm_database}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - shared_backplane
 
 networks:
-  cima-network:
-    driver: bridge
-
-volumes:
-  postgres-data:
-    driver: local
+  shared_backplane:
+    name: cima-crm-local-backplane

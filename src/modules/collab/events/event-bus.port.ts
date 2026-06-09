@@ -9,7 +9,8 @@ export interface EventBus {
     eventType: CollabEventType,
     projectId: string,
     actorSub: string,
-    data: T
+    data: T,
+    tx?: any
   ): Promise<void>;
   off(eventType: CollabEventType, handler: EventHandler): void;
   clear(): void;

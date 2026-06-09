@@ -21,11 +21,15 @@ export type CollabEventType =
   | "brief.updated";
 
 export interface CollabEvent<T = unknown> {
+  version: number;
+  contractVersion: number;
   type: CollabEventType;
   projectId: string;
   actorSub: string;
   timestamp: Date;
   data: T;
+  traceId?: string;
+  correlationId?: string;
 }
 
 export interface ProjectCreatedEvent {

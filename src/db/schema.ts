@@ -12,11 +12,20 @@ import {
   uniqueIndex,
   index,
   bigint,
+  serial,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 
 export const collabSchema = pgSchema("schema_collab");
+
+export const schemaVersion = collabSchema.table("schema_version", {
+  id: serial("id").primaryKey(),
+  version: varchar("version", { length: 50 }).notNull(),
+  appliedBy: varchar("applied_by", { length: 100 }).notNull(),
+  appliedAt: timestamp("applied_at", { mode: "date", withTimezone: true }).defaultNow().notNull(),
+  source: varchar("source", { length: 255 }).notNull(),
+});
 
 export const projectTypeEnum = collabSchema.enum("project_type", ["campaign_service", "product_order"]);
 
@@ -387,17 +396,29 @@ export const auditLogs = collabSchema.table(
   {
     id: bigserial("id", { mode: "number" }).notNull(),
     actorSub: uuid("actor_sub"),
+    actorEmail: varchar("actor_email", { length: 255 }),
+    actorRole: varchar("actor_role", { length: 20 }),
     action: varchar("action", { length: 120 }).notNull(),
     resourceType: varchar("resource_type", { length: 80 }).notNull(),
-    resourceId: uuid("resource_id"),
+    resourceId: varchar("resource_id", { length: 255 }),
     ipAddress: varchar("ip_address", { length: 45 }),
     userAgent: varchar("user_agent", { length: 500 }),
+    correlationId: uuid("correlation_id"),
     details: jsonb("details"),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [primaryKey({ columns: [t.id, t.createdAt] })]
 );
 
+/**
+ * userIdentitySnapshots es una réplica local de solo lectura y consistencia eventual
+ * que almacena información de identidad del servicio crm-auth.
+ *
+ * Al estar desacoplado a nivel de base de datos, el consumidor de eventos que
+ * actualiza esta tabla está diseñado para tolerar la presencia de nuevos campos
+ * adicionales en los contratos de eventos de identidad, ignorándolos y mapeando
+ * solo las columnas definidas aquí.
+ */
 export const userIdentitySnapshots = collabSchema.table(
   "user_identity_snapshots",
   {
@@ -429,6 +450,27 @@ export const mediaAccessCache = collabSchema.table(
     primaryKey({ columns: [t.objectKey, t.forceDownload] }),
     index("idx_media_access_cache_expires_at").on(t.expiresAt),
   ],
+);
+
+export const collabOutbox = collabSchema.table(
+  "collab_outbox",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    eventType: varchar("event_type", { length: 80 }).notNull(),
+    projectId: uuid("project_id").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    availableAt: timestamp("available_at", { mode: "date" }).defaultNow().notNull(),
+    publishedAt: timestamp("published_at", { mode: "date" }),
+    lastError: varchar("last_error", { length: 1000 }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("collab_outbox_status_available_idx").on(t.status, t.availableAt),
+    index("collab_outbox_project_idx").on(t.projectId),
+  ]
 );
 
 export const projectsRelations = relations(projects, ({ many }) => ({

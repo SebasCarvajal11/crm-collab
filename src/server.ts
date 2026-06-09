@@ -4,9 +4,12 @@ import { pool } from "./db/connection";
 import { ensureAuditLogPartitions } from "./db/scripts/ensure-audit-log-partitions";
 import { setupDefaultEventHandlers, getEventBus } from "./modules/collab/events";
 import { startAuthEventConsumer } from "./modules/collab/events/auth-event-handler";
+import { startAuthDlqReplayer, stopAuthDlqReplayer } from "./modules/collab/events/auth-events-dlq";
 import { startMediaResponseConsumer, stopMediaResponseConsumer } from "./shared/media-command-client";
-import { closeRedisConnections } from "./shared/redis";
+import { closeRedisConnections, initRedis } from "./shared/redis";
 import { getLogger } from "./shared/logger";
+
+if (process.env.REDIS_URL) initRedis(process.env.REDIS_URL);
 
 const logger = getLogger();
 
@@ -24,6 +27,7 @@ logger.info("[mod-collab] Event system initialized");
 void startAuthEventConsumer().catch((err) =>
   logger.error({ err }, "[mod-collab] Auth event consumer failed to start")
 );
+startAuthDlqReplayer();
 void startMediaResponseConsumer().catch((err) =>
   logger.error({ err }, "[mod-collab] Media response consumer failed to start")
 );
@@ -48,6 +52,7 @@ const shutdown = async (signal: string) => {
   await getEventBus().disconnect().catch((err) => logger.error({ err }, "[shutdown] eventBus.disconnect"));
   const { stopAuthEventConsumer } = await import("./modules/collab/events/auth-event-handler");
   await stopAuthEventConsumer().catch((err) => logger.error({ err }, "[shutdown] authEventConsumer.stop"));
+  stopAuthDlqReplayer();
   await stopMediaResponseConsumer().catch((err) => logger.error({ err }, "[shutdown] mediaResponseConsumer.stop"));
   await closeRedisConnections();
   await pool.end().catch((err) => logger.error({ err }, "[shutdown] pool.end"));

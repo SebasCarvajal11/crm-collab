@@ -450,6 +450,21 @@ paths:
                     type: string
                     example: "mod-collab"
 
+  /.well-known/service-jwks.json:
+    get:
+      summary: JWKS (clave pública RS256 de mod-collab para verificación de firmas de servicio a servicio)
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: Documento JWK Set (RFC 7517)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Contiene keys con kid, kty, n, e, alg, use
+
   /openapi.yaml:
     get:
       summary: Especificación OpenAPI
@@ -1482,6 +1497,370 @@ paths:
                     $ref: '#/components/schemas/Brief'
         '403':
           description: Solo admin puede editar brief
+
+  /collab/projects/search:
+    get:
+      summary: Buscar proyectos del usuario
+      tags:
+        - Projects
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Proyectos encontrados
+
+  /collab/projects/{projectId}/board:
+    get:
+      summary: Obtener el tablero (columnas y tareas) del proyecto
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Columnas y tareas del proyecto
+
+  /collab/projects/{projectId}/chat/internal/read:
+    post:
+      summary: Marcar chat interno como leído
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Leído
+
+  /collab/projects/{projectId}/chat/external/read:
+    post:
+      summary: Marcar chat externo como leído
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Leído
+
+  /collab/notifications/chat-mentions/unread:
+    get:
+      summary: Obtener menciones de chat no leídas
+      tags:
+        - Chat
+      responses:
+        '200':
+          description: Menciones no leídas
+
+  /collab/notifications/chat-mentions/unread/count:
+    get:
+      summary: Contar menciones de chat no leídas
+      tags:
+        - Chat
+      responses:
+        '200':
+          description: Cantidad de menciones
+
+  /collab/notifications/chat-mentions/{notificationId}/read:
+    patch:
+      summary: Marcar mención de chat como leída
+      tags:
+        - Chat
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Marcar como leído
+
+  /collab/projects/{projectId}/timeline:
+    get:
+      summary: Obtener el historial de acciones del proyecto
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Historial de acciones
+
+  /collab/projects/{projectId}/files/timeline:
+    get:
+      summary: Obtener el historial de archivos del proyecto
+      tags:
+        - Files
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Historial de archivos
+
+  /collab/projects/{projectId}/files/upload-url:
+    post:
+      summary: Obtener URL de subida de archivo para el proyecto
+      tags:
+        - Files
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: URL generada
+
+  /collab/projects/{projectId}/files/upload:
+    post:
+      summary: Subir un archivo al proyecto
+      tags:
+        - Files
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Archivo subido
+
+  /collab/projects/{projectId}/files/uploaded-object:
+    delete:
+      summary: Eliminar archivo subido del proyecto
+      tags:
+        - Files
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: objectKey
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Archivo eliminado
+
+  /collab/files/{fileId}/download:
+    get:
+      summary: Descargar un archivo
+      tags:
+        - Files
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: preview
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Archivo descargado
+
+  /collab/files/{fileId}/access:
+    get:
+      summary: Obtener acceso a un archivo
+      tags:
+        - Files
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: preview
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Acceso obtenido
+
+  /collab/files/{fileId}:
+    delete:
+      summary: Eliminar un archivo
+      tags:
+        - Files
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Archivo eliminado
+    patch:
+      summary: Actualizar metadatos de un archivo
+      tags:
+        - Files
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Archivo actualizado
+
+  /collab/projects/{projectId}/tasks/{taskId}/comments:
+    get:
+      summary: Listar comentarios de una tarea
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Comentarios listados
+    post:
+      summary: Crear comentario en una tarea
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Comentario creado
+
+  /collab/projects/{projectId}/tasks/{taskId}/files:
+    get:
+      summary: Listar archivos adjuntos de una tarea
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Archivos listados
+
+  /collab/projects/{projectId}/tasks/{taskId}/files/upload-url:
+    post:
+      summary: URL de subida de archivo para tarea
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: URL generada
+
+  /collab/projects/{projectId}/tasks/{taskId}/files/metadata:
+    post:
+      summary: Confirmar metadatos de archivo de tarea
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Metadatos confirmados
 
 tags:
   - name: System
