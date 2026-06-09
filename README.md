@@ -28,7 +28,6 @@ Ver [`.env.example`](./.env.example) para la lista completa.
 
 ```bash
 pnpm install
-pnpm db:bootstrap             # crear schema_collab y rol en Postgres
 pnpm db:push                  # aplicar migraciones Drizzle
 pnpm dev                      # servidor con hot-reload en :3001
 ```
@@ -39,12 +38,6 @@ Endpoints útiles:
 - Métricas: `http://localhost:3001/metrics`
 - Service JWKS: `http://localhost:3001/.well-known/service-jwks.json`
 - OpenAPI: `http://localhost:3001/openapi.yaml`
-
-Workers (procesos separados):
-
-```bash
-pnpm worker:collab-outbox     # publica eventos de collab a Redis Stream
-```
 
 Utilidades:
 
@@ -76,7 +69,7 @@ Ver [crm-infra/ONBOARDING.md](../crm-infra/ONBOARDING.md).
 
 ```bash
 pnpm test:unit      # unitarios Vitest
-pnpm test           # smoke Hurl contra gateway local
+pnpm test:contract  # contrato Hurl contra gateway
 ```
 
 ## Contrato público
