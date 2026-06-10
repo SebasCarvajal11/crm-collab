@@ -9,6 +9,7 @@
     "build": "pnpm --prefix cima-contracts build && tsc",
     "start": "tsx src/server.ts",
     "worker:collab-outbox": "tsx src/workers/collab-outbox.worker.ts",
+    "db:bootstrap": "tsx src/db/scripts/bootstrap.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
