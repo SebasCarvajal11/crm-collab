@@ -15,7 +15,7 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$is_worker" = "false" ] && [ -n "${DATABASE_URL:-}" ]; then
+if [ "$is_worker" = "false" ] && [ "${RUN_DB_SETUP_ON_STARTUP:-false}" = "true" ] && [ -n "${DATABASE_URL:-}" ]; then
   echo "Ejecutando migraciones de base de datos..."
   pnpm db:migrate
 fi
