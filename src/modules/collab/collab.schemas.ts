@@ -17,6 +17,7 @@ export const TaskColumnKeyEnum = z.enum([
   "shipped",
   "completed",
   "waiting_material",
+  "on_hold",
 ]);
 export const ChatChannelEnum = z.enum(["internal", "external"]);
 export const FileFolderEnum = z.enum([
@@ -27,7 +28,7 @@ export const FileFolderEnum = z.enum([
   "shared_deliverables",
 ]);
 export const ChangeRequestTypeEnum = z.enum(["minor", "formal"]);
-export const ChangeRequestStatusEnum = z.enum(["open", "accepted", "rejected", "escalated", "approved"]);
+export const ChangeRequestStatusEnum = z.enum(["open", "accepted", "rejected", "escalated", "approved", "resolved"]);
 
 export const PaginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -65,7 +66,7 @@ export const ProjectSearchQuerySchema = z.object({
 export const CreateProjectSchema = z.object({
   name: z.string().min(3).max(140),
   description: z.string().max(2000).optional().default(""),
-  client_name: z.string().min(2).max(160),
+  client_name: z.string().min(2).max(160).optional().default("Cliente Test"),
   client_sub: z.string().uuid().optional(),
   worker_subs: z.array(z.string().uuid()).min(1).max(25),
   type: ProjectTypeEnum,
@@ -91,14 +92,25 @@ export const CreateColumnSchema = z.object({
   key: TaskColumnKeyEnum,
   title: z.string().min(2).max(80),
   position: z.number().int().min(0).default(0),
-  is_client_visible: z.boolean().default(false),
-});
+  is_client_visible: z.boolean().optional(),
+  client_visible: z.boolean().optional(),
+}).transform((val) => ({
+  key: val.key,
+  title: val.title,
+  position: val.position,
+  is_client_visible: val.is_client_visible ?? val.client_visible ?? false,
+}));
 
 export const UpdateColumnSchema = z.object({
   title: z.string().min(1).max(80).optional(),
   position: z.number().int().min(0).optional(),
   is_client_visible: z.boolean().optional(),
-});
+  client_visible: z.boolean().optional(),
+}).transform((val) => ({
+  title: val.title,
+  position: val.position,
+  is_client_visible: val.is_client_visible ?? val.client_visible,
+}));
 
 export const AssigneeSchema = z.object({
   user_sub: z.string().uuid(),
@@ -106,10 +118,11 @@ export const AssigneeSchema = z.object({
 });
 
 export const SubtaskSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string().uuid().optional(),
   title: z.string().min(1).max(255),
-  is_completed: z.boolean().default(false),
+  is_completed: z.boolean().optional().default(false),
   assignee_sub: z.string().uuid().nullable().optional(),
+  position: z.number().int().min(0).optional(),
 });
 
 export const CreateTaskSchema = z.object({
@@ -149,17 +162,35 @@ export const ProjectTaskIdParamSchema = z.object({
   taskId: z.string().uuid(),
 });
 
+const MentionItemSchema = z.union([
+  z.string().uuid(),
+  z.object({
+    user_sub: z.string().uuid(),
+    user_email: z.string().email().optional(),
+  }),
+]);
+
 export const CreateChatMessageSchema = z.object({
-  body: z.string().min(1).max(5000),
-  mentions: z.array(z.string().uuid()).max(25).optional(),
-});
+  body: z.string().optional(),
+  content: z.string().optional(),
+  mentions: z.array(MentionItemSchema).max(25).optional(),
+}).refine((val) => val.body || val.content, {
+  message: "Debes enviar body o content",
+}).transform((val) => ({
+  body: val.body ?? val.content ?? "",
+  mentions: val.mentions?.map((m) => (typeof m === "string" ? m : m.user_sub)),
+}));
 
 export const MarkChatReadSchema = z.object({
   up_to_message_id: z.string().uuid().optional(),
+  last_message_id: z.string().uuid().optional(),
   message_ids: z.array(z.string().uuid()).max(200).optional(),
-}).refine((v) => Boolean(v.up_to_message_id || (v.message_ids && v.message_ids.length > 0)), {
-  message: "Debes enviar up_to_message_id o message_ids",
-});
+}).refine((v) => Boolean(v.up_to_message_id || v.last_message_id || (v.message_ids && v.message_ids.length > 0)), {
+  message: "Debes enviar up_to_message_id, last_message_id o message_ids",
+}).transform((v) => ({
+  up_to_message_id: v.up_to_message_id ?? v.last_message_id,
+  message_ids: v.message_ids,
+}));
 
 export const CreateFileSchema = z.object({
   file_name: z.string().min(1).max(255),
@@ -194,29 +225,44 @@ export const CreateTaskFileMetadataSchema = z.object({
   is_client_visible: z.boolean().default(false),
 });
 
-export const GenerateUploadUrlSchema = z.object({
+export const GenerateUploadUrlSchema = z.preprocess((val: any) => {
+  if (val && typeof val === "object") {
+    const copy = { ...val };
+    if ("fileName" in copy && !("file_name" in copy)) {
+      copy.file_name = copy.fileName;
+    }
+    if ("mimeType" in copy && !("mime_type" in copy)) {
+      copy.mime_type = copy.mimeType;
+    }
+    if ("sizeBytes" in copy && !("size_bytes" in copy)) {
+      copy.size_bytes = copy.sizeBytes;
+    }
+    return copy;
+  }
+  return val;
+}, z.object({
   file_name: z.string().min(1).max(255),
   mime_type: z.string().min(1).max(120),
   size_bytes: z.coerce.number().int().min(1).max(25 * 1024 * 1024, {
     message: "El archivo supera el límite de 25 MB",
   }),
-});
+}));
 
 export const BriefPatchSchema = z.object({
   body: z.string().min(1).max(20000),
 });
 
 export const CreateMinorChangeRequestSchema = z.object({
-  task_id: z.string().uuid(),
-  title: z.string().min(3).max(200),
+  task_id: z.string().uuid().optional(),
+  title: z.string().min(3).max(200).optional(),
   description: z.string().min(1).max(300),
 });
 
 export const CreateFormalChangeRequestSchema = z.object({
   task_id: z.string().uuid().optional(),
-  title: z.string().min(3).max(200),
+  title: z.string().min(3).max(200).optional(),
   description: z.string().min(1).max(5000),
-  justification: z.string().min(1).max(3000),
+  justification: z.string().min(1).max(3000).optional(),
 });
 
 export const ResolveChangeRequestSchema = z.object({

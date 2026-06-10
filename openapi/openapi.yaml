@@ -429,7 +429,7 @@ security:
   - BearerAuth: []
 
 paths:
-  /health:
+  /api/v1/health:
     get:
       summary: Health check del servicio
       tags:
@@ -450,7 +450,7 @@ paths:
                     type: string
                     example: "mod-collab"
 
-  /.well-known/service-jwks.json:
+  /api/v1/.well-known/service-jwks.json:
     get:
       summary: JWKS (clave pública RS256 de mod-collab para verificación de firmas de servicio a servicio)
       tags:
@@ -465,7 +465,7 @@ paths:
                 type: object
                 description: Contiene keys con kid, kty, n, e, alg, use
 
-  /openapi.yaml:
+  /api/v1/openapi.yaml:
     get:
       summary: Especificación OpenAPI
       tags:
@@ -479,7 +479,7 @@ paths:
               schema:
                 type: string
 
-  /docs:
+  /api/v1/docs:
     get:
       summary: Documentación interactiva Swagger UI
       tags:
@@ -493,7 +493,7 @@ paths:
               schema:
                 type: string
 
-  /collab/projects:
+  /api/v1/collab/projects:
     get:
       summary: Listar proyectos del usuario
       tags:
@@ -602,7 +602,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /collab/projects/{projectId}:
+  /api/v1/collab/projects/{projectId}:
     patch:
       summary: Actualizar proyecto
       tags:
@@ -651,7 +651,7 @@ paths:
         '404':
           description: Proyecto no encontrado
 
-  /collab/projects/{projectId}/workspace:
+  /api/v1/collab/projects/{projectId}/workspace:
     get:
       summary: Obtener workspace completo del proyecto
       description: Retorna proyecto, miembros, tablero (columnas + tareas), brief y cambios formales
@@ -703,7 +703,7 @@ paths:
         '404':
           description: Proyecto no encontrado
 
-  /collab/projects/{projectId}/members:
+  /api/v1/collab/projects/{projectId}/members:
     get:
       summary: Listar miembros del proyecto
       tags:
@@ -767,7 +767,7 @@ paths:
         '403':
           description: Sin permisos
 
-  /collab/projects/{projectId}/columns:
+  /api/v1/collab/projects/{projectId}/columns:
     get:
       summary: Listar columnas del proyecto
       tags:
@@ -837,7 +837,7 @@ paths:
         '403':
           description: Solo admin puede crear columnas
 
-  /collab/columns/{columnId}:
+  /api/v1/collab/columns/{columnId}:
     patch:
       summary: Actualizar columna
       tags:
@@ -875,7 +875,7 @@ paths:
         '403':
           description: Solo admin puede editar columnas
 
-  /collab/projects/{projectId}/tasks:
+  /api/v1/collab/projects/{projectId}/tasks:
     get:
       summary: Listar tareas del proyecto
       tags:
@@ -960,7 +960,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/Task'
 
-  /collab/tasks/{taskId}:
+  /api/v1/collab/tasks/{taskId}:
     patch:
       summary: Actualizar tarea (incluye moverla entre columnas)
       tags:
@@ -1015,7 +1015,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/Task'
 
-  /collab/projects/{projectId}/chat/internal:
+  /api/v1/collab/projects/{projectId}/chat/internal:
     get:
       summary: Listar mensajes del chat interno
       description: Solo accesible para admin y workers
@@ -1081,7 +1081,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/ChatMessage'
 
-  /collab/projects/{projectId}/chat/external:
+  /api/v1/collab/projects/{projectId}/chat/external:
     get:
       summary: Listar mensajes del chat externo
       description: Accesible para todos los miembros del proyecto
@@ -1145,7 +1145,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/ChatMessage'
 
-  /collab/projects/{projectId}/change-requests/minor:
+  /api/v1/collab/projects/{projectId}/change-requests/minor:
     post:
       summary: Crear solicitud de ajuste menor
       description: Solo cliente puede crear, worker/admin pueden aceptar
@@ -1194,7 +1194,7 @@ paths:
         '403':
           description: Solo cliente puede solicitar ajuste menor
 
-  /collab/projects/{projectId}/change-requests/formal:
+  /api/v1/collab/projects/{projectId}/change-requests/formal:
     post:
       summary: Crear solicitud de cambio formal
       description: Cualquier miembro puede crear, solo admin puede aprobar
@@ -1240,7 +1240,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/ChangeRequest'
 
-  /collab/projects/{projectId}/change-requests/{changeRequestId}:
+  /api/v1/collab/projects/{projectId}/change-requests/{changeRequestId}:
     patch:
       summary: Resolver solicitud de cambio
       description: Worker/admin para minor, solo admin para formal
@@ -1293,7 +1293,7 @@ paths:
         '403':
           description: Sin permisos para resolver
 
-  /collab/projects/{projectId}/change-log/formal:
+  /api/v1/collab/projects/{projectId}/change-log/formal:
     get:
       summary: Listar registro de cambios formales aprobados
       tags:
@@ -1318,7 +1318,7 @@ paths:
                     items:
                       $ref: '#/components/schemas/BriefChangeLog'
 
-  /collab/projects/{projectId}/files:
+  /api/v1/collab/projects/{projectId}/files:
     get:
       summary: Listar archivos del proyecto
       description: Cliente solo ve archivos marcados como visibles
@@ -1398,7 +1398,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/ProjectFile'
 
-  /collab/files/{fileId}/approve:
+  /api/v1/collab/files/{fileId}/approve:
     patch:
       summary: Marcar archivo como aprobado por cliente
       description: Solo admin puede aprobar
@@ -1436,7 +1436,7 @@ paths:
         '403':
           description: Solo admin puede aprobar archivos
 
-  /collab/projects/{projectId}/brief:
+  /api/v1/collab/projects/{projectId}/brief:
     get:
       summary: Obtener brief del proyecto
       tags:
@@ -1498,7 +1498,7 @@ paths:
         '403':
           description: Solo admin puede editar brief
 
-  /collab/projects/search:
+  /api/v1/collab/projects/search:
     get:
       summary: Buscar proyectos del usuario
       tags:
@@ -1517,7 +1517,7 @@ paths:
         '200':
           description: Proyectos encontrados
 
-  /collab/projects/{projectId}/board:
+  /api/v1/collab/projects/{projectId}/board:
     get:
       summary: Obtener el tablero (columnas y tareas) del proyecto
       tags:
@@ -1533,7 +1533,7 @@ paths:
         '200':
           description: Columnas y tareas del proyecto
 
-  /collab/projects/{projectId}/chat/internal/read:
+  /api/v1/collab/projects/{projectId}/chat/internal/read:
     post:
       summary: Marcar chat interno como leído
       tags:
@@ -1549,7 +1549,7 @@ paths:
         '200':
           description: Leído
 
-  /collab/projects/{projectId}/chat/external/read:
+  /api/v1/collab/projects/{projectId}/chat/external/read:
     post:
       summary: Marcar chat externo como leído
       tags:
@@ -1565,7 +1565,7 @@ paths:
         '200':
           description: Leído
 
-  /collab/notifications/chat-mentions/unread:
+  /api/v1/collab/notifications/chat-mentions/unread:
     get:
       summary: Obtener menciones de chat no leídas
       tags:
@@ -1574,7 +1574,7 @@ paths:
         '200':
           description: Menciones no leídas
 
-  /collab/notifications/chat-mentions/unread/count:
+  /api/v1/collab/notifications/chat-mentions/unread/count:
     get:
       summary: Contar menciones de chat no leídas
       tags:
@@ -1583,7 +1583,7 @@ paths:
         '200':
           description: Cantidad de menciones
 
-  /collab/notifications/chat-mentions/{notificationId}/read:
+  /api/v1/collab/notifications/chat-mentions/{notificationId}/read:
     patch:
       summary: Marcar mención de chat como leída
       tags:
@@ -1599,7 +1599,7 @@ paths:
         '200':
           description: Marcar como leído
 
-  /collab/projects/{projectId}/timeline:
+  /api/v1/collab/projects/{projectId}/timeline:
     get:
       summary: Obtener el historial de acciones del proyecto
       tags:
@@ -1615,7 +1615,7 @@ paths:
         '200':
           description: Historial de acciones
 
-  /collab/projects/{projectId}/files/timeline:
+  /api/v1/collab/projects/{projectId}/files/timeline:
     get:
       summary: Obtener el historial de archivos del proyecto
       tags:
@@ -1631,7 +1631,7 @@ paths:
         '200':
           description: Historial de archivos
 
-  /collab/projects/{projectId}/files/upload-url:
+  /api/v1/collab/projects/{projectId}/files/upload-url:
     post:
       summary: Obtener URL de subida de archivo para el proyecto
       tags:
@@ -1647,7 +1647,7 @@ paths:
         '200':
           description: URL generada
 
-  /collab/projects/{projectId}/files/upload:
+  /api/v1/collab/projects/{projectId}/files/upload:
     post:
       summary: Subir un archivo al proyecto
       tags:
@@ -1663,7 +1663,7 @@ paths:
         '200':
           description: Archivo subido
 
-  /collab/projects/{projectId}/files/uploaded-object:
+  /api/v1/collab/projects/{projectId}/files/uploaded-object:
     delete:
       summary: Eliminar archivo subido del proyecto
       tags:
@@ -1684,7 +1684,7 @@ paths:
         '200':
           description: Archivo eliminado
 
-  /collab/files/{fileId}/download:
+  /api/v1/collab/files/{fileId}/download:
     get:
       summary: Descargar un archivo
       tags:
@@ -1704,7 +1704,7 @@ paths:
         '200':
           description: Archivo descargado
 
-  /collab/files/{fileId}/access:
+  /api/v1/collab/files/{fileId}/access:
     get:
       summary: Obtener acceso a un archivo
       tags:
@@ -1724,7 +1724,7 @@ paths:
         '200':
           description: Acceso obtenido
 
-  /collab/files/{fileId}:
+  /api/v1/collab/files/{fileId}:
     delete:
       summary: Eliminar un archivo
       tags:
@@ -1754,7 +1754,7 @@ paths:
         '200':
           description: Archivo actualizado
 
-  /collab/projects/{projectId}/tasks/{taskId}/comments:
+  /api/v1/collab/projects/{projectId}/tasks/{taskId}/comments:
     get:
       summary: Listar comentarios de una tarea
       tags:
@@ -1796,7 +1796,7 @@ paths:
         '200':
           description: Comentario creado
 
-  /collab/projects/{projectId}/tasks/{taskId}/files:
+  /api/v1/collab/projects/{projectId}/tasks/{taskId}/files:
     get:
       summary: Listar archivos adjuntos de una tarea
       tags:
@@ -1818,7 +1818,7 @@ paths:
         '200':
           description: Archivos listados
 
-  /collab/projects/{projectId}/tasks/{taskId}/files/upload-url:
+  /api/v1/collab/projects/{projectId}/tasks/{taskId}/files/upload-url:
     post:
       summary: URL de subida de archivo para tarea
       tags:
@@ -1840,7 +1840,7 @@ paths:
         '200':
           description: URL generada
 
-  /collab/projects/{projectId}/tasks/{taskId}/files/metadata:
+  /api/v1/collab/projects/{projectId}/tasks/{taskId}/files/metadata:
     post:
       summary: Confirmar metadatos de archivo de tarea
       tags:

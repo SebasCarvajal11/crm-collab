@@ -1,3 +1,5 @@
+packages:
+  - 'cima-contracts'
 allowBuilds:
   '@sebascarvajal11/cima-contracts': true
   esbuild: true

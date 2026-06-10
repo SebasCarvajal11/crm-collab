@@ -117,8 +117,8 @@ To ensure zero-downtime deployments where old and new versions of a service run 
 
 ## Observabilidad
 
-- **Health**: `GET /health` — estado de DB y Redis. Devuelve `{ status, version, uptimeSec, dependencies }`.
-- **Métricas**: `GET /metrics` — Prometheus text/plain (prom-client). Incluye:
+- **Health**: `GET /api/v1/health` — estado de DB y Redis. Devuelve `{ status, version, uptimeSec, dependencies }`.
+- **Métricas**: `GET /api/v1/metrics` — Prometheus text/plain (prom-client). Incluye:
   - `http_requests_total`, `http_request_duration_seconds`, `http_errors_5xx_total`
   - `worker_outbox_depth{worker="collab-outbox"}` — pendientes en `collab_outbox` DB
   - Métricas de Node.js por defecto (heap, event loop lag, GC)

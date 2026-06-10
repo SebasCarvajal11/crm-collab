@@ -62,6 +62,7 @@ export const taskColumnKeyEnum = collabSchema.enum("task_column_key", [
   "shipped",
   "completed",
   "waiting_material",
+  "on_hold",
 ]);
 
 export const chatChannelEnum = collabSchema.enum("chat_channel", ["internal", "external", "system"]);
@@ -147,7 +148,6 @@ export const projectTaskColumns = collabSchema.table(
   (t) => [
     index("idx_project_task_columns_project_id").on(t.projectId),
     uniqueIndex("uq_project_task_columns_project_key").on(t.projectId, t.key),
-    uniqueIndex("uq_project_task_columns_project_position").on(t.projectId, t.position),
   ]
 );
 

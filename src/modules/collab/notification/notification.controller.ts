@@ -13,7 +13,7 @@ export const createNotificationController = (service: ReturnType<typeof createNo
 
   countUnreadMentionNotifications: async (c: Context<AppEnv>) => {
     const count = await service.countUnreadMentionNotifications(actorFromContext(c));
-    return c.json({ data: { unread_count: count } }, 200);
+    return c.json({ data: { count: String(count), unread_count: count } }, 200);
   },
 
   markMentionNotificationSeen: async (c: Context<AppEnv>) => {

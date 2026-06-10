@@ -12,7 +12,8 @@ export type TaskColumnKey =
   | "quality_control"
   | "shipped"
   | "completed"
-  | "waiting_material";
+  | "waiting_material"
+  | "on_hold";
 
 export type ProjectTaskSnapshot = {
   columnKey: TaskColumnKey;
@@ -39,6 +40,7 @@ const PROGRESS_BY_COLUMN: Record<TaskColumnKey, number> = {
   shipped: 100,
   completed: 100,
   waiting_material: 10,
+  on_hold: 10,
 };
 
 export class ProjectTask {

@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   validate:
-    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-ci.yml@main
+    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-ci.yml@v2.1.0
     with:
       component: collab
       test_command: pnpm test:unit

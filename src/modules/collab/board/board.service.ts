@@ -110,7 +110,7 @@ export const createBoardService = (
         blockedByTaskId?: string | null;
         clientVisible: boolean;
         position: number;
-        subtasks?: { id: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[];
+        subtasks?: { id?: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[];
       },
       meta: RequestMeta
     ) => {
@@ -204,7 +204,7 @@ export const createBoardService = (
         blockedByTaskId?: string | null;
         clientVisible?: boolean;
         position?: number;
-        subtasks?: { id: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[];
+        subtasks?: { id?: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[];
       },
       meta: RequestMeta
     ) => {

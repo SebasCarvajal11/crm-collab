@@ -34,10 +34,10 @@ pnpm dev                      # servidor con hot-reload en :3001
 
 Endpoints útiles:
 
-- Health: `http://localhost:3001/health`
-- Métricas: `http://localhost:3001/metrics`
-- Service JWKS: `http://localhost:3001/.well-known/service-jwks.json`
-- OpenAPI: `http://localhost:3001/openapi.yaml`
+- Health: `http://localhost:3001/api/v1/health`
+- Métricas: `http://localhost:3001/api/v1/metrics`
+- Service JWKS: `http://localhost:3001/api/v1/.well-known/service-jwks.json`
+- OpenAPI: `http://localhost:3001/api/v1/openapi.yaml`
 
 Utilidades:
 
@@ -76,4 +76,4 @@ pnpm test:contract  # contrato Hurl contra gateway
 
 - OpenAPI: [`openapi/openapi.yaml`](./openapi/openapi.yaml)
 - Gateway manifest: [`gateway/gateway.manifest.json`](./gateway/gateway.manifest.json)
-- Service JWKS: `/.well-known/service-jwks.json` (para verificación por `crm-media`)
+- Service JWKS: `/api/v1/.well-known/service-jwks.json` (para verificación por `crm-media`)

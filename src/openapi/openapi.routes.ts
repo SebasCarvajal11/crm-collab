@@ -27,7 +27,7 @@ const swaggerUiHtml = `<!DOCTYPE html>
   <script>
     window.onload = () => {
       SwaggerUIBundle({
-        url: window.location.origin + "/openapi.yaml",
+        url: window.location.origin + "/api/v1/openapi.yaml",
         dom_id: "#swagger-ui",
         presets: [SwaggerUIBundle.presets.apis],
         layout: "BaseLayout",

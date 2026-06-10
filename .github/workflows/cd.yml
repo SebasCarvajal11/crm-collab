@@ -13,7 +13,7 @@ permissions:
 jobs:
   deploy:
     if: ${{ github.event_name == 'workflow_dispatch' || (vars.AUTO_DEPLOY_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main') }}
-    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-deploy.yml@main
+    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-deploy.yml@v2.1.0
     with:
       component: collab
       deploy_branch: main

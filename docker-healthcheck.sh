@@ -38,4 +38,14 @@ if [ "$is_worker" = "true" ]; then
   exit $?
 fi
 
-node -e "require('http').get('http://localhost:3001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+node -e "
+  const http = require('http');
+  const req = http.get({
+    host: '127.0.0.1',
+    port: Number(process.env.PORT || 3001),
+    path: '/api/v1/health',
+    timeout: 5000,
+  }, (res) => process.exit(res.statusCode === 200 ? 0 : 1));
+  req.on('timeout', () => req.destroy(new Error('healthcheck timeout')));
+  req.on('error', () => process.exit(1));
+"

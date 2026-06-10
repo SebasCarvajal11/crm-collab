@@ -40,7 +40,7 @@ const envSchema = z
     JWT_PUBLIC_KEY: pemFromEnv.optional(),
     JWT_ISS: z.string().optional(),
     /**
-     * URI del endpoint JWKS de crm-auth (e.g. http://auth:3000/.well-known/jwks.json).
+     * URI del endpoint JWKS de crm-auth (e.g. http://auth:3000/api/v1/.well-known/jwks.json).
      * Alternativa a JWT_PUBLIC_KEY para validación directa de tokens sin pasar
      * por el gateway. Si ambos están presentes, JWT_PUBLIC_KEY tiene precedencia.
      */

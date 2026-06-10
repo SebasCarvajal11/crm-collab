@@ -6,8 +6,9 @@
   "description": "Collaboration and project-management service for the CIMA CRM multi-repo platform.",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "pnpm --prefix cima-contracts build && tsc",
     "start": "tsx src/server.ts",
+    "worker:collab-outbox": "tsx src/workers/collab-outbox.worker.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -33,7 +34,7 @@
   },
   "homepage": "https://github.com/SebasCarvajal11/crm-collab#readme",
   "dependencies": {
-    "@sebascarvajal11/cima-contracts": "^0.2.0",
+    "@sebascarvajal11/cima-contracts": "workspace:*",
     "@hono/node-server": "^1.19.14",
     "@hono/zod-validator": "^0.8.0",
     "dotenv": "^17.4.2",
@@ -43,6 +44,7 @@
     "ioredis": "^5.11.1",
     "pg": "^8.20.0",
     "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
     "prom-client": "^15.1.3",
     "tsx": "^4.21.0",
     "uuid": "^14.0.0",
@@ -53,7 +55,7 @@
     "@types/pg": "^8.20.0",
     "@types/uuid": "^11.0.0",
     "openapi-typescript": "^7.13.0",
-    "pino-pretty": "^13.1.3",
+
     "typescript": "^5.8.3",
     "vitest": "^4.1.8",
     "yaml": "^2.7.0"

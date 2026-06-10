@@ -3,31 +3,31 @@
   "version": "1.0.0",
   "endpoints": [
     {
-      "endpoint": "/.well-known/service-jwks.json",
+      "endpoint": "/api/v1/.well-known/service-jwks.json",
       "method": "GET",
-      "backend_url": "/.well-known/service-jwks.json",
+      "backend_url": "/api/v1/.well-known/service-jwks.json",
       "public": true,
-      "openapi_ref": "GET /.well-known/service-jwks.json"
+      "openapi_ref": "GET /api/v1/.well-known/service-jwks.json"
     },
     {
-      "endpoint": "/docs/collab/openapi.yaml",
+      "endpoint": "/api/v1/docs/collab/openapi.yaml",
       "method": "GET",
-      "backend_url": "/openapi.yaml",
+      "backend_url": "/api/v1/openapi.yaml",
       "public": true,
-      "openapi_ref": "GET /openapi.yaml"
+      "openapi_ref": "GET /api/v1/openapi.yaml"
     },
     {
-      "endpoint": "/docs/collab/v1/openapi.yaml",
+      "endpoint": "/api/v1/docs/collab/v1/openapi.yaml",
       "method": "GET",
-      "backend_url": "/openapi.yaml",
+      "backend_url": "/api/v1/openapi.yaml",
       "public": true,
-      "openapi_ref": "GET /openapi.yaml"
+      "openapi_ref": "GET /api/v1/openapi.yaml"
     },
     {
       "endpoint": "/api/v1/collab/projects",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects",
-      "openapi_ref": "GET /collab/projects"
+      "openapi_ref": "GET /api/v1/collab/projects"
     },
     {
       "endpoint": "/api/v1/collab/projects/search",
@@ -37,193 +37,193 @@
         "q",
         "limit"
       ],
-      "openapi_ref": "GET /collab/projects/search"
+      "openapi_ref": "GET /api/v1/collab/projects/search"
     },
     {
       "endpoint": "/api/v1/collab/projects",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects",
-      "openapi_ref": "POST /collab/projects"
+      "openapi_ref": "POST /api/v1/collab/projects"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/projects/{projectId}",
-      "openapi_ref": "PATCH /collab/projects/{projectId}"
+      "openapi_ref": "PATCH /api/v1/collab/projects/{projectId}"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/board",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/board",
-      "openapi_ref": "GET /collab/projects/{projectId}/board"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/board"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/workspace",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/workspace",
-      "openapi_ref": "GET /collab/projects/{projectId}/workspace"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/workspace"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/members",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/members",
-      "openapi_ref": "GET /collab/projects/{projectId}/members"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/members"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/members",
       "method": "PUT",
       "backend_url": "/api/v1/collab/projects/{projectId}/members",
-      "openapi_ref": "PUT /collab/projects/{projectId}/members"
+      "openapi_ref": "PUT /api/v1/collab/projects/{projectId}/members"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/columns",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/columns",
-      "openapi_ref": "GET /collab/projects/{projectId}/columns"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/columns"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/columns",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/columns",
-      "openapi_ref": "POST /collab/projects/{projectId}/columns"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/columns"
     },
     {
       "endpoint": "/api/v1/collab/columns/{columnId}",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/columns/{columnId}",
-      "openapi_ref": "PATCH /collab/columns/{columnId}"
+      "openapi_ref": "PATCH /api/v1/collab/columns/{columnId}"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks",
-      "openapi_ref": "GET /collab/projects/{projectId}/tasks"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/tasks"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks",
-      "openapi_ref": "POST /collab/projects/{projectId}/tasks"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/tasks"
     },
     {
       "endpoint": "/api/v1/collab/tasks/{taskId}",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/tasks/{taskId}",
-      "openapi_ref": "PATCH /collab/tasks/{taskId}"
+      "openapi_ref": "PATCH /api/v1/collab/tasks/{taskId}"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/internal",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/internal",
-      "openapi_ref": "GET /collab/projects/{projectId}/chat/internal"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/chat/internal"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/internal",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/internal",
-      "openapi_ref": "POST /collab/projects/{projectId}/chat/internal"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/internal"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/internal/read",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/internal/read",
-      "openapi_ref": "POST /collab/projects/{projectId}/chat/internal/read"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/internal/read"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/external",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/external",
-      "openapi_ref": "GET /collab/projects/{projectId}/chat/external"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/chat/external"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/external",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/external",
-      "openapi_ref": "POST /collab/projects/{projectId}/chat/external"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/external"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/external/read",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/external/read",
-      "openapi_ref": "POST /collab/projects/{projectId}/chat/external/read"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/external/read"
     },
     {
       "endpoint": "/api/v1/collab/notifications/chat-mentions/unread",
       "method": "GET",
       "backend_url": "/api/v1/collab/notifications/chat-mentions/unread",
-      "openapi_ref": "GET /collab/notifications/chat-mentions/unread"
+      "openapi_ref": "GET /api/v1/collab/notifications/chat-mentions/unread"
     },
     {
       "endpoint": "/api/v1/collab/notifications/chat-mentions/unread/count",
       "method": "GET",
       "backend_url": "/api/v1/collab/notifications/chat-mentions/unread/count",
-      "openapi_ref": "GET /collab/notifications/chat-mentions/unread/count"
+      "openapi_ref": "GET /api/v1/collab/notifications/chat-mentions/unread/count"
     },
     {
       "endpoint": "/api/v1/collab/notifications/chat-mentions/{notificationId}/read",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/notifications/chat-mentions/{notificationId}/read",
-      "openapi_ref": "PATCH /collab/notifications/chat-mentions/{notificationId}/read"
+      "openapi_ref": "PATCH /api/v1/collab/notifications/chat-mentions/{notificationId}/read"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/change-requests/minor",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/change-requests/minor",
-      "openapi_ref": "POST /collab/projects/{projectId}/change-requests/minor"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/change-requests/minor"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/change-requests/formal",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/change-requests/formal",
-      "openapi_ref": "POST /collab/projects/{projectId}/change-requests/formal"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/change-requests/formal"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/change-requests/{changeRequestId}",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/projects/{projectId}/change-requests/{changeRequestId}",
-      "openapi_ref": "PATCH /collab/projects/{projectId}/change-requests/{changeRequestId}"
+      "openapi_ref": "PATCH /api/v1/collab/projects/{projectId}/change-requests/{changeRequestId}"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/change-log/formal",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/change-log/formal",
-      "openapi_ref": "GET /collab/projects/{projectId}/change-log/formal"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/change-log/formal"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/files",
-      "openapi_ref": "GET /collab/projects/{projectId}/files"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/files"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/files",
-      "openapi_ref": "POST /collab/projects/{projectId}/files"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/files"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/timeline",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/timeline",
-      "openapi_ref": "GET /collab/projects/{projectId}/timeline"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/timeline"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files/timeline",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/files/timeline",
-      "openapi_ref": "GET /collab/projects/{projectId}/files/timeline"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/files/timeline"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files/upload-url",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/files/upload-url",
-      "openapi_ref": "POST /collab/projects/{projectId}/files/upload-url"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/files/upload-url"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files/upload",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/files/upload",
-      "openapi_ref": "POST /collab/projects/{projectId}/files/upload"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/files/upload"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files/uploaded-object",
@@ -232,13 +232,13 @@
       "input_query_strings": [
         "objectKey"
       ],
-      "openapi_ref": "DELETE /collab/projects/{projectId}/files/uploaded-object"
+      "openapi_ref": "DELETE /api/v1/collab/projects/{projectId}/files/uploaded-object"
     },
     {
       "endpoint": "/api/v1/collab/files/{fileId}/approve",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/files/{fileId}/approve",
-      "openapi_ref": "PATCH /collab/files/{fileId}/approve"
+      "openapi_ref": "PATCH /api/v1/collab/files/{fileId}/approve"
     },
     {
       "endpoint": "/api/v1/collab/files/{fileId}/download",
@@ -247,7 +247,7 @@
       "input_query_strings": [
         "preview"
       ],
-      "openapi_ref": "GET /collab/files/{fileId}/download"
+      "openapi_ref": "GET /api/v1/collab/files/{fileId}/download"
     },
     {
       "endpoint": "/api/v1/collab/files/{fileId}/access",
@@ -256,61 +256,61 @@
       "input_query_strings": [
         "preview"
       ],
-      "openapi_ref": "GET /collab/files/{fileId}/access"
+      "openapi_ref": "GET /api/v1/collab/files/{fileId}/access"
     },
     {
       "endpoint": "/api/v1/collab/files/{fileId}",
       "method": "DELETE",
       "backend_url": "/api/v1/collab/files/{fileId}",
-      "openapi_ref": "DELETE /collab/files/{fileId}"
+      "openapi_ref": "DELETE /api/v1/collab/files/{fileId}"
     },
     {
       "endpoint": "/api/v1/collab/files/{fileId}",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/files/{fileId}",
-      "openapi_ref": "PATCH /collab/files/{fileId}"
+      "openapi_ref": "PATCH /api/v1/collab/files/{fileId}"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/comments",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/comments",
-      "openapi_ref": "GET /collab/projects/{projectId}/tasks/{taskId}/comments"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/tasks/{taskId}/comments"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/comments",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/comments",
-      "openapi_ref": "POST /collab/projects/{projectId}/tasks/{taskId}/comments"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/tasks/{taskId}/comments"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/files",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/files",
-      "openapi_ref": "GET /collab/projects/{projectId}/tasks/{taskId}/files"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/tasks/{taskId}/files"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/files/upload-url",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/files/upload-url",
-      "openapi_ref": "POST /collab/projects/{projectId}/tasks/{taskId}/files/upload-url"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/tasks/{taskId}/files/upload-url"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/files/metadata",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/files/metadata",
-      "openapi_ref": "POST /collab/projects/{projectId}/tasks/{taskId}/files/metadata"
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/tasks/{taskId}/files/metadata"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/brief",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/brief",
-      "openapi_ref": "GET /collab/projects/{projectId}/brief"
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/brief"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/brief",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/projects/{projectId}/brief",
-      "openapi_ref": "PATCH /collab/projects/{projectId}/brief"
+      "openapi_ref": "PATCH /api/v1/collab/projects/{projectId}/brief"
     }
   ]
 }

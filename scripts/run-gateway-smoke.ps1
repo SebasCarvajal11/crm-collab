@@ -45,7 +45,7 @@ function Wait-HttpEndpoint([string]$Url, [int]$Attempts = 30, [int]$DelaySeconds
 function Ensure-LocalGatewayStack([string]$BaseUrl) {
   $workspaceRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
   $infraRepo = Resolve-RepoPath -EnvVarName "CIMA_INFRA_PATH" -SiblingName "crm-infra"
-  $gatewayHealthy = Test-HttpEndpoint "$BaseUrl/health"
+  $gatewayHealthy = Test-HttpEndpoint "$BaseUrl/api/v1/health"
 
   if ($gatewayHealthy) {
     return
@@ -71,7 +71,7 @@ function Ensure-LocalGatewayStack([string]$BaseUrl) {
     Pop-Location
   }
 
-  $requiredEndpoints = @("$BaseUrl/health")
+  $requiredEndpoints = @("$BaseUrl/api/v1/health")
 
   foreach ($endpoint in $requiredEndpoints) {
     if (-not (Wait-HttpEndpoint $endpoint 30 2)) {

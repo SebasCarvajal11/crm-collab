@@ -38,23 +38,45 @@ export const createChangeRequestService = (
     createMinorChangeRequest: async (
       actor: Actor,
       projectId: string,
-      payload: { taskId: string; title: string; description: string },
+      payload: { taskId?: string; title?: string; description: string },
       meta: RequestMeta
     ) => {
-      const task = await boardRepository.findTaskById(payload.taskId);
+      let taskId = payload.taskId;
+      if (!taskId) {
+        const tasksResult = await boardRepository.listTasksByProject({ projectId, limit: 1, offset: 0 });
+        if (tasksResult.rows.length > 0) {
+          taskId = tasksResult.rows[0].id;
+        } else {
+          const columns = await boardRepository.listTaskColumnsByProject(projectId);
+          const columnId = columns[0]?.id;
+          if (!columnId) throw new BadRequestError("No hay columnas en el proyecto para crear una tarea");
+          const defaultTask = await boardRepository.createTask({
+            projectId,
+            columnId,
+            title: "Tarea Automática para Ajuste",
+            description: "Creada automáticamente para asociar la solicitud de cambio",
+            priority: "medium",
+            reporterSub: actor.sub,
+            position: 0,
+          });
+          taskId = defaultTask.id;
+        }
+      }
+      const task = await boardRepository.findTaskById(taskId);
       if (!task || task.projectId !== projectId) throw new NotFoundError("Tarea no encontrada");
       if (actor.role !== "client") throw new ForbiddenError("Solo cliente solicita ajuste menor");
       const openMinor = await changeRequestRepository.listChangeRequestsByProject(projectId, "minor");
-      if (openMinor.some((r) => r.taskId === payload.taskId && r.status === "open")) {
+      if (openMinor.some((r) => r.taskId === taskId && r.status === "open")) {
         throw new BadRequestError("Ya existe un ajuste menor abierto para esta tarea");
       }
+      const title = payload.title || `Ajuste menor: ${payload.description.slice(0, 50)}`;
       const request = await changeRequestRepository.createChangeRequest({
         projectId,
-        taskId: payload.taskId,
+        taskId: taskId,
         type: "minor",
         status: "open",
         requestedBySub: actor.sub,
-        title: payload.title,
+        title: title,
         description: payload.description,
         justification: null,
       });
@@ -63,8 +85,8 @@ export const createChangeRequestService = (
         channel: "external",
         messageType: "minor_request",
         authorSub: actor.sub,
-        body: `Solicitud de ajuste menor: ${payload.title}`,
-        metadata: { changeRequestId: request.id, taskId: payload.taskId },
+        body: `Solicitud de ajuste menor: ${title}`,
+        metadata: { changeRequestId: request.id, taskId: taskId },
       });
       await createAuditRepository(db).createAuditLog({
         actorSub: actor.sub,
@@ -77,10 +99,10 @@ export const createChangeRequestService = (
 
       void collabEvents.emit("change_request.minor.created", projectId, actor.sub, {
         changeRequestId: request.id,
-        taskId: payload.taskId,
+        taskId: taskId,
         taskTitle: task.title,
         requestedBySub: actor.sub,
-        title: payload.title,
+        title: title,
         description: payload.description,
       });
 
@@ -90,26 +112,28 @@ export const createChangeRequestService = (
     createFormalChangeRequest: async (
       actor: Actor,
       projectId: string,
-      payload: { taskId?: string; title: string; description: string; justification: string },
+      payload: { taskId?: string; title?: string; description: string; justification?: string },
       meta: RequestMeta
     ) => {
       await assertProjectAccess(accessRepo, actor, projectId);
+      const title = payload.title || "Solicitud de Cambio Formal";
+      const justification = payload.justification || "Justificación predeterminada";
       const request = await changeRequestRepository.createChangeRequest({
         projectId,
         taskId: payload.taskId ?? null,
         type: "formal",
         status: "open",
         requestedBySub: actor.sub,
-        title: payload.title,
+        title: title,
         description: payload.description,
-        justification: payload.justification,
+        justification: justification,
       });
       await chatRepository.createChatMessage({
         projectId,
         channel: "external",
         messageType: "formal_request",
         authorSub: actor.sub,
-        body: `Solicitud de cambio formal: ${payload.title}`,
+        body: `Solicitud de cambio formal: ${title}`,
         metadata: { changeRequestId: request.id },
       });
       await createAuditRepository(db).createAuditLog({

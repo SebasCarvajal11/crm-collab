@@ -16,6 +16,22 @@ const getIp = (c: Context) =>
 const getUa = (c: Context) => c.req.header("user-agent") ?? "unknown";
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
 
+const mapMessage = (msg: any) => {
+  if (!msg) return msg;
+  return {
+    ...msg,
+    content: msg.body,
+  };
+};
+
+const mapMessagesPage = (result: any) => {
+  if (!result || !Array.isArray(result.items)) return result;
+  return {
+    ...result,
+    items: result.items.map(mapMessage),
+  };
+};
+
 export const createChatController = (service: ReturnType<typeof createChatService>) => ({
   listInternalChat: async (c: Context<AppEnv>) => {
     const q = validatedQuery<ChatMessageQuery>(c);
@@ -23,7 +39,7 @@ export const createChatController = (service: ReturnType<typeof createChatServic
       page: q.page,
       limit: q.limit,
     });
-    return c.json({ data: result }, 200);
+    return c.json({ data: mapMessagesPage(result) }, 200);
   },
 
   postInternalChat: async (c: Context<AppEnv>) => {
@@ -36,7 +52,7 @@ export const createChatController = (service: ReturnType<typeof createChatServic
       body.mentions,
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: row }, 201);
+    return c.json({ data: mapMessage(row) }, 201);
   },
 
   markInternalChatRead: async (c: Context<AppEnv>) => {
@@ -56,7 +72,7 @@ export const createChatController = (service: ReturnType<typeof createChatServic
       page: q.page,
       limit: q.limit,
     });
-    return c.json({ data: result }, 200);
+    return c.json({ data: mapMessagesPage(result) }, 200);
   },
 
   postExternalChat: async (c: Context<AppEnv>) => {
@@ -69,7 +85,7 @@ export const createChatController = (service: ReturnType<typeof createChatServic
       body.mentions,
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: row }, 201);
+    return c.json({ data: mapMessage(row) }, 201);
   },
 
   markExternalChatRead: async (c: Context<AppEnv>) => {

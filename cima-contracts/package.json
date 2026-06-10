@@ -1,0 +1,141 @@
+{
+  "name": "@sebascarvajal11/cima-contracts",
+  "version": "0.3.1",
+  "type": "module",
+  "packageManager": "pnpm@11.1.1",
+  "private": false,
+  "description": "Versioned integration contracts for the CIMA CRM microservices.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SebasCarvajal11/cima-contracts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SebasCarvajal11/cima-contracts/issues"
+  },
+  "homepage": "https://github.com/SebasCarvajal11/cima-contracts#readme",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./auth-identity-events": {
+      "types": "./dist/auth-identity-events.d.ts",
+      "default": "./dist/auth-identity-events.js"
+    },
+    "./collab-project-events": {
+      "types": "./dist/collab-project-events.d.ts",
+      "default": "./dist/collab-project-events.js"
+    },
+    "./media-asset-events": {
+      "types": "./dist/media-asset-events.d.ts",
+      "default": "./dist/media-asset-events.js"
+    },
+    "./shared-ui-types": {
+      "types": "./dist/shared-ui-types.d.ts",
+      "default": "./dist/shared-ui-types.js"
+    },
+    "./audit-events": {
+      "types": "./dist/audit-events.d.ts",
+      "default": "./dist/audit-events.js"
+    },
+    "./stream-conventions": {
+      "types": "./dist/stream-conventions.d.ts",
+      "default": "./dist/stream-conventions.js"
+    },
+    "./jwks": {
+      "types": "./dist/jwks.d.ts",
+      "default": "./dist/jwks.js"
+    },
+    "./health": {
+      "types": "./dist/health.d.ts",
+      "default": "./dist/health.js"
+    },
+    "./event-consumer": {
+      "types": "./dist/event-consumer.d.ts",
+      "default": "./dist/event-consumer.js"
+    },
+    "./gateway-manifest": {
+      "types": "./dist/gateway-manifest.d.ts",
+      "default": "./dist/gateway-manifest.js"
+    },
+    "./metrics": {
+      "types": "./dist/metrics.d.ts",
+      "default": "./dist/metrics.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
+    },
+    "./redis": {
+      "types": "./dist/redis.d.ts",
+      "default": "./dist/redis.js"
+    },
+    "./worker-health": {
+      "types": "./dist/worker-health.d.ts",
+      "default": "./dist/worker-health.js"
+    },
+    "./hono-security-middleware": {
+      "types": "./dist/hono-security-middleware.d.ts",
+      "default": "./dist/hono-security-middleware.js"
+    },
+    "./hono-request-logger-middleware": {
+      "types": "./dist/hono-request-logger-middleware.d.ts",
+      "default": "./dist/hono-request-logger-middleware.js"
+    },
+    "./hono-error-handler-middleware": {
+      "types": "./dist/hono-error-handler-middleware.d.ts",
+      "default": "./dist/hono-error-handler-middleware.js"
+    },
+    "./hono-auth-middleware": {
+      "types": "./dist/hono-auth-middleware.d.ts",
+      "default": "./dist/hono-auth-middleware.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsc --noEmit -p tsconfig.json",
+    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm test && pnpm build",
+    "pack:dry-run": "pnpm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://npm.pkg.github.com/@sebascarvajal11"
+  },
+  "peerDependencies": {
+    "zod": "^4.4.0",
+    "prom-client": "^15.0.0",
+    "hono": "^4.0.0",
+    "pino": "^9.0.0",
+    "ioredis": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "prom-client": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "pino": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.8.3",
+    "zod": "^4.4.3",
+    "hono": "^4.12.18",
+    "pino": "^9.0.0",
+    "ioredis": "^5.0.0",
+    "prom-client": "^15.1.3"
+  }
+}

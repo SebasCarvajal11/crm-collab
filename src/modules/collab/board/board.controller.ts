@@ -19,6 +19,27 @@ const getIp = (c: Context) =>
   "unknown";
 const getUa = (c: Context) => c.req.header("user-agent") ?? "unknown";
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
+const mapColumn = (col: any) => {
+  if (!col) return col;
+  const isVisible = col.isClientVisible ?? col.is_client_visible;
+  return {
+    ...col,
+    isClientVisible: isVisible,
+    is_client_visible: isVisible,
+    client_visible: isVisible,
+  };
+};
+const mapSubtasks = (
+  subtasks:
+    | Array<{ id?: string; title: string; is_completed: boolean; assignee_sub?: string | null }>
+    | undefined,
+) =>
+  subtasks?.map((subtask) => ({
+    ...(subtask.id ? { id: subtask.id } : {}),
+    title: subtask.title,
+    isCompleted: subtask.is_completed,
+    assigneeSub: subtask.assignee_sub ?? null,
+  }));
 
 export const createBoardController = (service: ReturnType<typeof createBoardService>) => ({
   createTaskColumn: async (c: Context<AppEnv>) => {
@@ -34,12 +55,12 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: row }, 201);
+    return c.json({ data: mapColumn(row) }, 201);
   },
 
   listTaskColumns: async (c: Context<AppEnv>) => {
     const rows = await service.listTaskColumns(actorFromContext(c), requiredParam(c, "projectId"));
-    return c.json({ data: rows }, 200);
+    return c.json({ data: rows.map(mapColumn) }, 200);
   },
 
   updateTaskColumn: async (c: Context<AppEnv>) => {
@@ -54,7 +75,7 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: row }, 200);
+    return c.json({ data: mapColumn(row) }, 200);
   },
 
   createTask: async (c: Context<AppEnv>) => {
@@ -73,7 +94,7 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
         blockedByTaskId: body.blocked_by_task_id,
         clientVisible: body.client_visible,
         position: body.position,
-        subtasks: body.subtasks?.map((s) => ({ id: s.id, title: s.title, isCompleted: s.is_completed, assigneeSub: s.assignee_sub ?? null })),
+        subtasks: mapSubtasks(body.subtasks),
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
@@ -106,7 +127,7 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
         blockedByTaskId: body.blocked_by_task_id,
         clientVisible: body.client_visible,
         position: body.position,
-        subtasks: body.subtasks?.map((s) => ({ id: s.id, title: s.title, isCompleted: s.is_completed, assigneeSub: s.assignee_sub ?? null })),
+        subtasks: mapSubtasks(body.subtasks),
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
