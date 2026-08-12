@@ -132,3 +132,9 @@ To ensure zero-downtime deployments where old and new versions of a service run 
 | `GATEWAY_TRUST_SECRET` / `gatewayTrustMiddleware` | 2026-05-15 | Eliminado; validación JWKS directa |
 | `MEDIA_COMMAND_SECRET` (HMAC) | 2026-06-01 | Reemplazado por JWT de servicio firmado con clave RSA por par |
 | `crm-bff` como downstream | 2026-06-01 | `crm-bff` fue eliminado del stack |
+
+## Integration Change Gate
+
+- File workflows are asynchronous commands: preserve correlation IDs, idempotency assumptions, and DLQ observability; never replace them with direct Media database or storage access.
+- A timeout is an unknown completion state, not proof of failure. Surface a dependency error and use the response stream/DLQ for recovery.
+- Any API change requires synchronized OpenAPI, gateway manifest, Hurl scenario, and frontend route audit.

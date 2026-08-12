@@ -77,3 +77,9 @@ pnpm test:contract  # contrato Hurl contra gateway
 - OpenAPI: [`openapi/openapi.yaml`](./openapi/openapi.yaml)
 - Gateway manifest: [`gateway/gateway.manifest.json`](./gateway/gateway.manifest.json)
 - Service JWKS: `/api/v1/.well-known/service-jwks.json` (para verificación por `crm-media`)
+
+## Integración con Media
+
+Las operaciones de archivos de proyectos se coordinan mediante Redis Streams: `crm-collab` publica un comando firmado con su JWT de servicio y espera una respuesta correlacionada de `crm-media`. El esquema compartido valida la forma del JWT; la verificación criptográfica ocurre exclusivamente en Media.
+
+El tiempo de espera es configurable con `MEDIA_COMMAND_TIMEOUT_MS` (15 s por defecto). El llamador debe tratar un timeout como error de dependencia recuperable y no asumir que el comando no pudo completarse: la correlación y la DLQ permiten inspección y recuperación posterior.
