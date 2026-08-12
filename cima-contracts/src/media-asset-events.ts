@@ -21,7 +21,7 @@ export const fileUploadUrlRequestedSchema = z.object({
   mimeType: z.string().min(1).max(120),
   sizeBytes: z.coerce.number().int().min(1).max(25 * 1024 * 1024),
   actor: mediaCommandActorSchema,
-  signature: z.string().regex(/^[a-f0-9]{64}$/i),
+  signature: z.string().regex(/^[^.]+\.[^.]+\.[^.]+$/, "Debe ser un JWT de servicio"),
 });
 
 export const fileMetadataRequestedSchema = z.object({
@@ -36,7 +36,7 @@ export const fileMetadataRequestedSchema = z.object({
   mimeType: z.string().min(1).max(120),
   sizeBytes: z.coerce.number().int().min(1).max(25 * 1024 * 1024),
   actor: mediaCommandActorSchema,
-  signature: z.string().regex(/^[a-f0-9]{64}$/i),
+  signature: z.string().regex(/^[^.]+\.[^.]+\.[^.]+$/, "Debe ser un JWT de servicio"),
 });
 
 export const fileAccessRequestedSchema = z.object({
@@ -49,7 +49,7 @@ export const fileAccessRequestedSchema = z.object({
   objectKey: z.string().min(1),
   forceDownload: z.boolean().default(false),
   actor: mediaCommandActorSchema,
-  signature: z.string().regex(/^[a-f0-9]{64}$/i),
+  signature: z.string().regex(/^[^.]+\.[^.]+\.[^.]+$/, "Debe ser un JWT de servicio"),
 });
 
 export const fileDeleteRequestedSchema = z.object({
@@ -61,7 +61,7 @@ export const fileDeleteRequestedSchema = z.object({
   requestedAt: z.string().optional(),
   objectKey: z.string().min(1),
   actor: mediaCommandActorSchema,
-  signature: z.string().regex(/^[a-f0-9]{64}$/i),
+  signature: z.string().regex(/^[^.]+\.[^.]+\.[^.]+$/, "Debe ser un JWT de servicio"),
 });
 
 export const mediaCommandSchema = z.discriminatedUnion("type", [
