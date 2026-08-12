@@ -34,6 +34,20 @@ export function getRedisSubscriber(): Redis | undefined {
   return subscriberConnection;
 }
 
+/**
+ * Creates an isolated connection for a blocking Redis stream consumer.
+ *
+ * A connection executing XREADGROUP BLOCK cannot safely be shared with another
+ * blocking consumer: Redis serializes commands on a single TCP connection.
+ * Consumers own and close the connection returned by this factory.
+ */
+export function createRedisStreamConsumerConnection(): Redis | undefined {
+  if (!configuredUrl) return undefined;
+  return new Redis(configuredUrl, {
+    maxRetriesPerRequest: null,
+  });
+}
+
 export async function closeRedisConnections(): Promise<void> {
   await Promise.all([
     sharedConnection?.quit().catch(() => undefined),

@@ -3,7 +3,7 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { db } from "../db/connection";
 import { mediaAccessCache } from "../db/schema";
-import { getRedisConnection, getRedisSubscriber } from "./redis";
+import { createRedisStreamConsumerConnection, getRedisConnection } from "./redis";
 import { AppError } from "./middlewares/error-handler.middleware";
 import { getLogger, traceStorage } from "./logger";
 import { signServiceJwt } from "../config/jwt";
@@ -123,6 +123,7 @@ const responseConsumerGroup = `${env.MEDIA_RESPONSES_CONSUMER_GROUP}:${responseC
 let responseLoopStarted = false;
 let responseLoopRunning = false;
 let responseLoopPromise: Promise<void> | null = null;
+let responseRedis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>> | undefined;
 
 const CACHE_SAFETY_WINDOW_MS = 15_000;
 
@@ -130,7 +131,7 @@ export async function startMediaResponseConsumer(): Promise<void> {
   if (responseLoopStarted) return;
   responseLoopStarted = true;
 
-  const redis = getRedisSubscriber();
+  const redis = createRedisStreamConsumerConnection();
   if (!redis) {
     logger.warn("[media-command-client] Redis no disponible; respuestas de media deshabilitadas");
     return;
@@ -151,6 +152,7 @@ export async function startMediaResponseConsumer(): Promise<void> {
     }
   }
 
+  responseRedis = redis;
   responseLoopRunning = true;
   responseLoopPromise = readMediaResponses(redis);
 }
@@ -163,6 +165,11 @@ export async function stopMediaResponseConsumer(): Promise<void> {
       .xadd(env.MEDIA_RESPONSES_STREAM_KEY, "*", "__shutdown__", "1")
       .catch(() => undefined);
   }
+
+  await responseRedis?.quit().catch(() => undefined);
+  responseRedis = undefined;
+  responseLoopPromise = null;
+  responseLoopStarted = false;
 
   if (responseLoopPromise) {
     await Promise.race([
@@ -367,7 +374,7 @@ function signMediaCommand(command: UnsignedMediaCommandRequest): MediaCommandReq
   return { ...command, signature };
 }
 
-async function readMediaResponses(redis: NonNullable<ReturnType<typeof getRedisSubscriber>>) {
+async function readMediaResponses(redis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>>) {
   while (responseLoopRunning) {
     try {
       const results = (await redis.xreadgroup(

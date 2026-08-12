@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { getRedisSubscriber, getRedisConnection } from "../../../shared/redis";
+import { createRedisStreamConsumerConnection, getRedisConnection } from "../../../shared/redis";
 
 import { env } from "../../../config/env";
 import { db } from "../../../db/connection";
@@ -50,13 +50,16 @@ const versionedSchemas: VersionedSchemas<AuthIdentityEvent> = new Map([
 // ── Consumer instance ─────────────────────────────────────────────────────────
 
 let consumer: RedisStreamConsumer<AuthIdentityEvent> | null = null;
+let consumerRedis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>> | undefined;
 
 export async function startAuthEventConsumer(): Promise<void> {
-  const redis = getRedisSubscriber();
+  const redis = createRedisStreamConsumerConnection();
   if (!redis) {
     logger.info("[auth-event-consumer] Redis no disponible; omitiendo consumer de auth events");
     return;
   }
+
+  consumerRedis = redis;
 
   consumer = new RedisStreamConsumer<AuthIdentityEvent>({
     streamKey:        env.AUTH_EVENTS_STREAM_KEY,
@@ -99,11 +102,13 @@ export async function startAuthEventConsumer(): Promise<void> {
 }
 
 export async function stopAuthEventConsumer(): Promise<void> {
-  const pub = getRedisSubscriber();
+  const pub = getRedisConnection();
   if (consumer && pub) {
     await consumer.stop(pub);
     consumer = null;
   }
+  await consumerRedis?.quit().catch(() => undefined);
+  consumerRedis = undefined;
 }
 
 // ── DLQ handler ───────────────────────────────────────────────────────────────
