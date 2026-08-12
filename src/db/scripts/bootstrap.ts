@@ -100,6 +100,7 @@ async function bootstrap() {
     `);
 
     await client.query(`GRANT ALL PRIVILEGES ON TABLE "${targetSchema}"."schema_version" TO "${targetUser}";`);
+    await client.query(`ALTER TABLE "${targetSchema}"."schema_version" OWNER TO "${targetUser}";`);
 
     const versionCheck = await client.query(
       `SELECT "version" FROM "${targetSchema}"."schema_version" ORDER BY "id" DESC LIMIT 1`

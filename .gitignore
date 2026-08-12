@@ -62,3 +62,6 @@ Desktop.ini
 # Testing
 coverage/
 .nyc_output
+test-results/
+tests/playwright/reports/
+tests/playwright/test-results/
