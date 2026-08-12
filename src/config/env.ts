@@ -54,7 +54,7 @@ const envSchema = z
     MEDIA_COMMANDS_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.collab.mediaCommands),
     MEDIA_RESPONSES_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.media.assetResponses),
     MEDIA_RESPONSES_CONSUMER_GROUP: z.string().default(STREAM_CONVENTIONS.groups.collab.mediaResponses),
-    MEDIA_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(8000),
+    MEDIA_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(15000),
     DOC_PAR_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(300),
     AUTH_EVENTS_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.identity.events),
     AUTH_EVENTS_CONSUMER_GROUP: z.string().default(STREAM_CONVENTIONS.groups.collab.authIdentity),

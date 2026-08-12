@@ -27,7 +27,7 @@ services:
       MEDIA_COMMANDS_STREAM_KEY: stream:collab.media-commands
       MEDIA_RESPONSES_STREAM_KEY: stream:media.asset-responses
       MEDIA_RESPONSES_CONSUMER_GROUP: group:collab.media-responses
-      MEDIA_COMMAND_TIMEOUT_MS: 8000
+      MEDIA_COMMAND_TIMEOUT_MS: 15000
     depends_on:
       postgres_db:
         condition: service_healthy
