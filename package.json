@@ -5,6 +5,7 @@
   "packageManager": "pnpm@11.1.1",
   "description": "Collaboration and project-management service for the CIMA CRM multi-repo platform.",
   "scripts": {
+    "predev": "pnpm --prefix cima-contracts build",
     "dev": "tsx watch src/server.ts",
     "build": "pnpm --prefix cima-contracts build && tsc",
     "start": "tsx src/server.ts",
