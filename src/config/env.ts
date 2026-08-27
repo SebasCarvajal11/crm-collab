@@ -66,6 +66,8 @@ const envSchema = z
     COLLAB_EVENTS_DLQ_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.collab.identityDlq),
     COLLAB_OUTBOX_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
     COLLAB_OUTBOX_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+    NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(180),
+    NOTIFICATION_RETENTION_INTERVAL_MS: z.coerce.number().int().min(60 * 60 * 1000).default(24 * 60 * 60 * 1000),
     DLQ_AUTO_REPLAY_INTERVAL_MS: z.coerce.number().int().nonnegative().default(60000),
     RATE_LIMIT_COLLAB_CHAT_MAX: z.coerce.number().int().positive().default(40),
     RATE_LIMIT_COLLAB_CHAT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 1000),

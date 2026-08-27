@@ -1,5 +1,6 @@
 import type { DbOrTx } from "../shared/db.types";
 import { and, asc, count, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { BadRequestError } from "../../../shared/middlewares/error-handler.middleware";
 import {
   projectFiles,
   projectSubtasks,
@@ -24,6 +25,29 @@ export const createBoardRepository = (conn: DbOrTx) => ({
     return row;
   },
 
+  createTaskColumnAtPosition: async (payload: NewProjectTaskColumn) => {
+    // The unique project/position index makes a direct insert fail whenever a
+    // caller inserts into the middle of a board. Move the suffix through a
+    // temporary negative range first so each statement remains valid under the
+    // non-deferrable unique index, then restore the desired contiguous order.
+    await conn
+      .update(projectTaskColumns)
+      .set({ position: sql`-(${projectTaskColumns.position}) - 1` })
+      .where(and(
+        eq(projectTaskColumns.projectId, payload.projectId),
+        sql`${projectTaskColumns.position} >= ${payload.position}`,
+        sql`${projectTaskColumns.position} >= 0`,
+      ));
+    await conn
+      .update(projectTaskColumns)
+      .set({ position: sql`-(${projectTaskColumns.position})` })
+      .where(and(
+        eq(projectTaskColumns.projectId, payload.projectId),
+        sql`${projectTaskColumns.position} < 0`,
+      ));
+    return conn.insert(projectTaskColumns).values(payload).returning().then(([row]) => row);
+  },
+
   createDefaultTaskColumns: async (projectId: string, type: ProjectType) => {
     const columns = defaultColumnsByType(type);
     const values: NewProjectTaskColumn[] = columns.map((c) => ({
@@ -37,11 +61,14 @@ export const createBoardRepository = (conn: DbOrTx) => ({
     return conn.insert(projectTaskColumns).values(values).returning();
   },
 
-  listTaskColumnsByProject: async (projectId: string) =>
+  listTaskColumnsByProject: async (projectId: string, isClientVisible?: boolean) =>
     conn
       .select()
       .from(projectTaskColumns)
-      .where(eq(projectTaskColumns.projectId, projectId))
+      .where(and(
+        eq(projectTaskColumns.projectId, projectId),
+        isClientVisible === undefined ? undefined : eq(projectTaskColumns.isClientVisible, isClientVisible)
+      ))
       .orderBy(asc(projectTaskColumns.position)),
 
   updateTaskColumnById: async (
@@ -54,6 +81,45 @@ export const createBoardRepository = (conn: DbOrTx) => ({
       .where(eq(projectTaskColumns.id, columnId))
       .returning();
     return row ?? null;
+  },
+
+  moveTaskColumnToPosition: async (column: { id: string; projectId: string; position: number }, nextPosition: number) => {
+    if (column.position === nextPosition) return;
+
+    // Free the current slot before restoring the shifted range. PostgreSQL
+    // validates this unique index immediately, so a single UPDATE would
+    // transiently collide with a neighbour.
+    await conn.update(projectTaskColumns)
+      .set({ position: -1 })
+      .where(eq(projectTaskColumns.id, column.id));
+
+    if (nextPosition > column.position) {
+      await conn.update(projectTaskColumns)
+        .set({ position: sql`-(${projectTaskColumns.position}) - 1` })
+        .where(and(
+          eq(projectTaskColumns.projectId, column.projectId),
+          sql`${projectTaskColumns.position} > ${column.position}`,
+          sql`${projectTaskColumns.position} <= ${nextPosition}`,
+        ));
+      await conn.update(projectTaskColumns)
+        .set({ position: sql`-(${projectTaskColumns.position}) - 2` })
+        .where(and(eq(projectTaskColumns.projectId, column.projectId), sql`${projectTaskColumns.position} < -1`));
+    } else {
+      await conn.update(projectTaskColumns)
+        .set({ position: sql`-(${projectTaskColumns.position}) - 1` })
+        .where(and(
+          eq(projectTaskColumns.projectId, column.projectId),
+          sql`${projectTaskColumns.position} >= ${nextPosition}`,
+          sql`${projectTaskColumns.position} < ${column.position}`,
+        ));
+      await conn.update(projectTaskColumns)
+        .set({ position: sql`-(${projectTaskColumns.position})` })
+        .where(and(eq(projectTaskColumns.projectId, column.projectId), sql`${projectTaskColumns.position} < -1`));
+    }
+
+    await conn.update(projectTaskColumns)
+      .set({ position: nextPosition, updatedAt: new Date() })
+      .where(eq(projectTaskColumns.id, column.id));
   },
 
   findTaskColumnById: async (columnId: string) => {
@@ -130,6 +196,22 @@ export const createBoardRepository = (conn: DbOrTx) => ({
     }
 
     const incomingIds = subtasks.map(s => s.id).filter(Boolean) as string[];
+    if (new Set(incomingIds).size !== incomingIds.length) {
+      throw new BadRequestError("Una subtarea no puede aparecer más de una vez");
+    }
+
+    // A supplied ID is only valid when it already belongs to this task. Without
+    // this guard, an ID from a different task could win the PK conflict and have
+    // its title/status overwritten by the current update.
+    if (incomingIds.length > 0) {
+      const ownedSubtasks = await conn
+        .select({ id: projectSubtasks.id })
+        .from(projectSubtasks)
+        .where(and(eq(projectSubtasks.taskId, taskId), inArray(projectSubtasks.id, incomingIds)));
+      if (ownedSubtasks.length !== incomingIds.length) {
+        throw new BadRequestError("Una o más subtareas no pertenecen a la tarea");
+      }
+    }
     
     // Delete ones removed from the list
     if (incomingIds.length > 0) {
@@ -212,12 +294,15 @@ export const createBoardRepository = (conn: DbOrTx) => ({
       .where(eq(projectTaskAssignees.taskId, taskId))
       .orderBy(asc(projectTaskAssignees.createdAt)),
 
-  listTaskAssigneesByProject: async (projectId: string) =>
+  listTaskAssigneesByProject: async (projectId: string, isClientVisible?: boolean) =>
     conn
       .select({ taskId: projectTaskAssignees.taskId, userSub: projectTaskAssignees.userSub, userEmail: projectTaskAssignees.userEmail })
       .from(projectTaskAssignees)
       .innerJoin(projectTasks, eq(projectTaskAssignees.taskId, projectTasks.id))
-      .where(eq(projectTasks.projectId, projectId)),
+      .where(and(
+        eq(projectTasks.projectId, projectId),
+        isClientVisible === undefined ? undefined : eq(projectTasks.isClientVisible, isClientVisible)
+      )),
 
   createTaskComment: async (payload: NewProjectTaskComment) => {
     const [row] = await conn.insert(projectTaskComments).values(payload).returning();

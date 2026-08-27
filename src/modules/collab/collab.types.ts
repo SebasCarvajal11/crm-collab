@@ -13,6 +13,7 @@ import type {
   projectTaskComments,
   projectChatMessageReads,
   projectMentionNotifications,
+  projectActivityNotifications,
   userIdentitySnapshots,
 } from "../../db/schema";
 
@@ -43,6 +44,8 @@ export type ProjectChatMessageRead = InferSelectModel<typeof projectChatMessageR
 export type NewProjectChatMessageRead = InferInsertModel<typeof projectChatMessageReads>;
 export type ProjectMentionNotification = InferSelectModel<typeof projectMentionNotifications>;
 export type NewProjectMentionNotification = InferInsertModel<typeof projectMentionNotifications>;
+export type ProjectActivityNotification = InferSelectModel<typeof projectActivityNotifications>;
+export type NewProjectActivityNotification = InferInsertModel<typeof projectActivityNotifications>;
 export type UserIdentitySnapshot = InferSelectModel<typeof userIdentitySnapshots>;
 export type NewUserIdentitySnapshot = InferInsertModel<typeof userIdentitySnapshots>;
 

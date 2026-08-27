@@ -47,6 +47,12 @@
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/projects/{projectId}",
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}",
       "method": "PATCH",
       "backend_url": "/api/v1/collab/projects/{projectId}",
       "openapi_ref": "PATCH /api/v1/collab/projects/{projectId}"
@@ -148,22 +154,22 @@
       "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/external/read"
     },
     {
-      "endpoint": "/api/v1/collab/notifications/chat-mentions/unread",
+      "endpoint": "/api/v1/collab/notifications/unread",
       "method": "GET",
-      "backend_url": "/api/v1/collab/notifications/chat-mentions/unread",
-      "openapi_ref": "GET /api/v1/collab/notifications/chat-mentions/unread"
+      "backend_url": "/api/v1/collab/notifications/unread",
+      "openapi_ref": "GET /api/v1/collab/notifications/unread"
     },
     {
-      "endpoint": "/api/v1/collab/notifications/chat-mentions/unread/count",
+      "endpoint": "/api/v1/collab/notifications/unread/count",
       "method": "GET",
-      "backend_url": "/api/v1/collab/notifications/chat-mentions/unread/count",
-      "openapi_ref": "GET /api/v1/collab/notifications/chat-mentions/unread/count"
+      "backend_url": "/api/v1/collab/notifications/unread/count",
+      "openapi_ref": "GET /api/v1/collab/notifications/unread/count"
     },
     {
-      "endpoint": "/api/v1/collab/notifications/chat-mentions/{notificationId}/read",
+      "endpoint": "/api/v1/collab/notifications/{notificationId}/read",
       "method": "PATCH",
-      "backend_url": "/api/v1/collab/notifications/chat-mentions/{notificationId}/read",
-      "openapi_ref": "PATCH /api/v1/collab/notifications/chat-mentions/{notificationId}/read"
+      "backend_url": "/api/v1/collab/notifications/{notificationId}/read",
+      "openapi_ref": "PATCH /api/v1/collab/notifications/{notificationId}/read"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/change-requests/minor",

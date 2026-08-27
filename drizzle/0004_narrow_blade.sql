@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_project_files_storage_path" ON "schema_collab"."project_files" USING btree ("storage_path");

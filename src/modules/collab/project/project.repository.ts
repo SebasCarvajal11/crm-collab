@@ -1,6 +1,5 @@
 import type { DbOrTx } from "../shared/db.types";
 import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
-import type { ProjectStatusSnapshot, ProjectTaskSnapshot, TaskColumnKey } from "../domain/project-aggregate";
 
 import {
   projectMembers,
@@ -24,6 +23,16 @@ type ProjectTimelineItemRow = {
   createdBySub: string | null;
   createdByEmail: string | null;
   isClientVisible: boolean;
+};
+
+type ProjectSearchResult = {
+  id: string;
+  name: string;
+  clientName: string;
+  clientEmail: string | null;
+  type: "campaign_service" | "product_order";
+  status: "todo" | "in_progress" | "in_review" | "completed";
+  progressPercent: number;
 };
 
 export const createProjectRepository = (conn: DbOrTx) => ({
@@ -165,7 +174,7 @@ export const createProjectRepository = (conn: DbOrTx) => ({
       ORDER BY p.updated_at DESC
       LIMIT ${opts.limit}
     `);
-    return (rows.rows ?? []) as ProjectTaskSnapshot[];
+    return (rows.rows ?? []) as ProjectSearchResult[];
   },
 
   findProjectById: async (projectId: string) => {
@@ -187,7 +196,6 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         | "status"
         | "progressPercent"
         | "estimatedDueDate"
-        | "unreadNotifications"
         | "latestApprovedFileId"
       >
     >
@@ -198,36 +206,6 @@ export const createProjectRepository = (conn: DbOrTx) => ({
       .where(eq(projects.id, projectId))
       .returning();
     return row ?? null;
-  },
-
-  updateProjectSummary: async (projectId: string, summary: ProjectStatusSnapshot) => {
-    const [row] = await conn
-      .update(projects)
-      .set({
-        status: summary.status,
-        progressPercent: summary.progressPercent,
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, projectId))
-      .returning();
-    return row ?? null;
-  },
-
-  listTaskStatusSnapshotsByProject: async (projectId: string) => {
-    const rows = await conn.execute(sql<{
-      columnKey: TaskColumnKey;
-      checklistProgress: number;
-    }>`
-      SELECT
-        c.key AS "columnKey",
-        t.checklist_progress AS "checklistProgress"
-      FROM schema_collab.project_tasks t
-      INNER JOIN schema_collab.project_task_columns c ON c.id = t.column_id
-      WHERE t.project_id = ${projectId}
-      ORDER BY t.position ASC, t.created_at ASC
-    `);
-
-    return (rows.rows ?? []) as ProjectTaskSnapshot[];
   },
 
   listProjectTimeline: async (projectId: string, isClientView: boolean, page = 1, limit = 20) => {

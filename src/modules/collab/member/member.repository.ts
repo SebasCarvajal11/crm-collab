@@ -1,5 +1,5 @@
 import type { DbOrTx } from "../shared/db.types";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, or } from "drizzle-orm";
 import { projectMembers } from "../../../db/schema";
 import type { NewProjectMember } from "../collab.types";
 
@@ -38,9 +38,15 @@ export const createMemberRepository = (conn: DbOrTx) => ({
   },
 
   touchProjectMemberActivity: async (projectId: string, userSub: string) => {
+    const now = new Date();
+    const staleAt = new Date(now.getTime() - 5 * 60 * 1000);
     await conn
       .update(projectMembers)
-      .set({ lastSeenAt: new Date(), updatedAt: new Date() })
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userSub, userSub)));
+      .set({ lastSeenAt: now, updatedAt: now })
+      .where(and(
+        eq(projectMembers.projectId, projectId),
+        eq(projectMembers.userSub, userSub),
+        or(isNull(projectMembers.lastSeenAt), lt(projectMembers.lastSeenAt, staleAt))
+      ));
   },
 });

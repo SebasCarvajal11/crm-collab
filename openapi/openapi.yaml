@@ -603,6 +603,39 @@ paths:
                 $ref: '#/components/schemas/Error'
 
   /api/v1/collab/projects/{projectId}:
+    get:
+      summary: Obtener proyecto por identificador
+      tags:
+        - Projects
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Proyecto solicitado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Project'
+        '403':
+          description: El usuario no pertenece al proyecto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Proyecto no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     patch:
       summary: Actualizar proyecto
       tags:
@@ -1565,29 +1598,29 @@ paths:
         '200':
           description: Leído
 
-  /api/v1/collab/notifications/chat-mentions/unread:
+  /api/v1/collab/notifications/unread:
     get:
-      summary: Obtener menciones de chat no leídas
+      summary: Obtener actividad y menciones no leídas
       tags:
-        - Chat
+        - Notifications
       responses:
         '200':
-          description: Menciones no leídas
+          description: Notificaciones no leídas visibles para el usuario autenticado
 
-  /api/v1/collab/notifications/chat-mentions/unread/count:
+  /api/v1/collab/notifications/unread/count:
     get:
-      summary: Contar menciones de chat no leídas
+      summary: Contar notificaciones no leídas
       tags:
-        - Chat
+        - Notifications
       responses:
         '200':
-          description: Cantidad de menciones
+          description: Cantidad de notificaciones no leídas
 
-  /api/v1/collab/notifications/chat-mentions/{notificationId}/read:
+  /api/v1/collab/notifications/{notificationId}/read:
     patch:
-      summary: Marcar mención de chat como leída
+      summary: Marcar una notificación como leída
       tags:
-        - Chat
+        - Notifications
       parameters:
         - name: notificationId
           in: path
@@ -1597,7 +1630,7 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Marcar como leído
+          description: Notificación marcada como leída
 
   /api/v1/collab/projects/{projectId}/timeline:
     get:

@@ -5,6 +5,7 @@ import { InMemoryEventBus } from "./in-memory.event-bus";
 import { RedisStreamsEventBus } from "./redis-streams.event-bus";
 import type { EventBus } from "./event-bus.port";
 import type { CollabEvent, CollabEventPayload } from "./event.types";
+import { persistActivityNotification } from "../notification/activity-notification.handler";
 
 const logger = getLogger();
 
@@ -35,8 +36,8 @@ export function getEventBus(): EventBus {
 export const collabEvents: EventBus = {
   on: (type, handler) => getEventBus().on(type, handler),
   onAny: (handler) => getEventBus().onAny(handler),
-  emit: async (type, projectId, actorSub, data) =>
-    getEventBus().emit(type, projectId, actorSub, data),
+  emit: async (type, projectId, actorSub, data, tx) =>
+    getEventBus().emit(type, projectId, actorSub, data, tx),
   off: (type, handler) => getEventBus().off(type, handler),
   clear: () => getEventBus().clear(),
   connect: () => getEventBus().connect(),
@@ -46,6 +47,7 @@ export const collabEvents: EventBus = {
 export async function setupDefaultEventHandlers(): Promise<void> {
   const bus = getEventBus();
   bus.onAny(logAllEvents);
+  bus.onAny(persistActivityNotification);
   await bus.connect();
 }
 

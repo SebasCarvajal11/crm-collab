@@ -9,5 +9,9 @@ export const canMoveTasks = (globalRole: GlobalRole, memberRole?: ProjectMemberR
 export const canInternalChat = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
   globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
 
+/** Workers assigned to a project may maintain its operational brief; clients remain read-only. */
+export const canEditBrief = (globalRole: GlobalRole, memberRole?: ProjectMemberRole) =>
+  globalRole === "admin" || memberRole === "admin" || memberRole === "worker";
+
 export const canReceiveMentionInChannel = (channel: "internal" | "external", memberRole: ProjectMemberRole) =>
   channel === "internal" ? memberRole === "admin" || memberRole === "worker" : true;

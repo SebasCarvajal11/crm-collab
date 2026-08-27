@@ -7,6 +7,7 @@ export type CollabEventType =
   | "task.updated"
   | "task.moved"
   | "task.assigned"
+  | "task.comment.created"
   | "chat.message.internal"
   | "chat.message.external"
   | "chat.mention"
@@ -21,6 +22,8 @@ export type CollabEventType =
   | "brief.updated";
 
 export interface CollabEvent<T = unknown> {
+  /** Identificador estable para que los consumidores sean idempotentes. */
+  id: string;
   version: number;
   contractVersion: number;
   type: CollabEventType;
@@ -39,6 +42,12 @@ export interface ProjectCreatedEvent {
   clientName: string;
   clientSub?: string;
   adminResponsibleSub: string;
+  status: "todo" | "in_progress" | "in_review" | "completed";
+  description: string | null;
+  progressPercent: number;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface TaskMovedEvent {

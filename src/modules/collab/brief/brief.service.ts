@@ -1,5 +1,5 @@
 import { ForbiddenError, NotFoundError } from "../../../shared/middlewares/error-handler.middleware";
-import { canManageProject } from "../shared/guards";
+import { canEditBrief } from "../shared/guards";
 import { assertProjectAccess } from "../shared/project-access";
 import { createAuditRepository } from "../repository/audit.repository";
 import type { GlobalRole } from "../collab.types";
@@ -39,7 +39,9 @@ export const createBriefService = (
 
     patchBrief: async (actor: Actor, projectId: string, body: string, meta: RequestMeta) => {
       const { member } = await assertProjectAccess(accessRepo, actor, projectId);
-      if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin edita brief");
+      if (!canEditBrief(actor.role, member?.role)) {
+        throw new ForbiddenError("Solo administradores y trabajadores del proyecto editan el brief");
+      }
       const brief = await briefRepository.upsertBrief({
         projectId,
         content: body,

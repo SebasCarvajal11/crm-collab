@@ -22,6 +22,27 @@
       "when": 1780876676369,
       "tag": "0002_thick_harry_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787082223670,
+      "tag": "0003_closed_the_renegades",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787103955480,
+      "tag": "0004_narrow_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787105811711,
+      "tag": "0005_reflective_mauler",
+      "breakpoints": true
     }
   ]
 }

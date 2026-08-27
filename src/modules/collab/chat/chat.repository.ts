@@ -92,6 +92,41 @@ export const createChatRepository = (conn: DbOrTx) => ({
     return rows.map((r) => r.id);
   },
 
+  markChatMessagesReadUpTo: async (
+    projectId: string,
+    channel: "internal" | "external" | "system",
+    createdAt: Date,
+    userSub: string,
+  ) => {
+    await conn.execute(sql`
+      INSERT INTO schema_collab.project_chat_message_reads (message_id, user_sub, read_at)
+      SELECT id, ${userSub}::uuid, NOW()
+      FROM schema_collab.project_chat_messages
+      WHERE project_id = ${projectId}::uuid
+        AND channel = ${channel}::schema_collab.chat_channel
+        AND created_at <= ${createdAt}
+      ON CONFLICT (message_id, user_sub)
+      DO UPDATE SET read_at = EXCLUDED.read_at
+    `);
+  },
+
+  listChatMessageIdsInChannel: async (
+    projectId: string,
+    channel: "internal" | "external" | "system",
+    messageIds: string[],
+  ) => {
+    if (!messageIds.length) return [];
+    const rows = await conn
+      .select({ id: projectChatMessages.id })
+      .from(projectChatMessages)
+      .where(and(
+        eq(projectChatMessages.projectId, projectId),
+        eq(projectChatMessages.channel, channel),
+        inArray(projectChatMessages.id, messageIds),
+      ));
+    return rows.map((row) => row.id);
+  },
+
   markChatMessagesRead: async (rows: NewProjectChatMessageRead[]) => {
     if (!rows.length) return [];
     return conn

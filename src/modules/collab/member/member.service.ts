@@ -1,14 +1,15 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../../shared/middlewares/error-handler.middleware";
 import { canManageProject } from "../shared/guards";
-import { assertProjectAccess } from "../shared/project-access";
+import { assertProjectAccess, assertProjectMemberRoleCompatibility } from "../shared/project-access";
 import { enrichProjectMembersWithProfiles } from "../shared/mappers";
 import { PROJECT_BOARD_TASK_LIMIT } from "../shared/constants";
 import type { GlobalRole } from "../collab.types";
 import { createAuditRepository } from "../repository/audit.repository";
 import { db } from "../../../db/connection";
-import type { createMemberRepository } from "./member.repository";
-import type { createProjectRepository } from "../project/project.repository";
-import type { createBoardRepository } from "../board/board.repository";
+import { createMemberRepository } from "./member.repository";
+import { createProjectRepository } from "../project/project.repository";
+import { createBoardRepository } from "../board/board.repository";
+import { getUserProfilesFromSnapshots } from "../../../shared/identity-snapshot-store";
 
 type Actor = {
   sub: string;
@@ -41,22 +42,29 @@ export const createMemberService = (
     ) => {
       const { project, member } = await assertProjectAccess(accessRepo, actor, projectId);
       if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin gestiona miembros");
-      const row = await memberRepository.upsertProjectMember({
-        projectId,
-        userSub,
-        role,
-        userEmail: userEmail ?? null,
+      const identity = await getUserProfilesFromSnapshots([userSub]);
+      if (identity.replicaUnavailable) throw new BadRequestError("No se pudo validar la identidad del miembro; intenta de nuevo");
+      const profile = identity.profiles.get(userSub);
+      if (!profile) throw new NotFoundError("Usuario no encontrado o aún no disponible");
+      assertProjectMemberRoleCompatibility(profile.role, role);
+      return db.transaction(async (tx) => {
+        const row = await createMemberRepository(tx).upsertProjectMember({
+          projectId,
+          userSub,
+          role,
+          userEmail: profile.email,
+        });
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "project_member_upserted",
+          resourceType: "project_member",
+          resourceId: projectId,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          details: { userSub, role },
+        });
+        return row;
       });
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "project_member_upserted",
-        resourceType: "project_member",
-        resourceId: projectId,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        details: { userSub, role },
-      });
-      return row;
     },
 
     listProjectMembers: async (actor: Actor, projectId: string) => {

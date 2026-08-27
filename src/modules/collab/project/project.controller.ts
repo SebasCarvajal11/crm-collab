@@ -56,6 +56,11 @@ export const createProjectController = (service: ReturnType<typeof createProject
     return c.json({ data: created }, 201);
   },
 
+  getProject: async (c: Context<AppEnv>) => {
+    const project = await service.getProject(actorFromContext(c), requiredParam(c, "projectId"));
+    return c.json({ data: project }, 200);
+  },
+
   updateProject: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpdateProjectBody>(c);
     const row = await service.updateProject(

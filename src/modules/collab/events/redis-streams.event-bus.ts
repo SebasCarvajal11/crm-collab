@@ -7,6 +7,7 @@ import { getLogger, traceStorage } from "../../../shared/logger";
 import { db } from "../../../db/connection";
 import { createCollabOutboxRepository } from "./collab-outbox.repository";
 import { getRedisConnection } from "../../../shared/redis";
+import { v7 as uuidv7 } from "uuid";
 
 const logger = getLogger();
 
@@ -52,6 +53,7 @@ export class RedisStreamsEventBus implements EventBus {
   ): Promise<void> {
     const store = traceStorage.getStore();
     const event: CollabEvent<T> = {
+      id: uuidv7(),
       version: 1,
       contractVersion: COLLAB_EVENT_CONTRACT_VERSION,
       type: eventType,
@@ -71,6 +73,11 @@ export class RedisStreamsEventBus implements EventBus {
       logger.error({ err, eventType }, `[RedisStreamsEventBus] Failed to save outbox event ${eventType}`);
       throw err;
     }
+
+    // When the event is persisted through a caller-owned transaction, it must
+    // not be observable before that transaction commits. The outbox worker
+    // publishes it after commit and the stream consumer dispatches it locally.
+    if (tx) return;
 
     await this.dispatchLocal(event as CollabEvent<CollabEventPayload>);
   }

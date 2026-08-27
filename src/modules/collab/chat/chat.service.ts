@@ -5,10 +5,10 @@ import { allowedMentionRolesByActor } from "../shared/mappers";
 import { assertProjectAccess } from "../shared/project-access";
 import { createAuditRepository } from "../repository/audit.repository";
 import type { GlobalRole } from "../collab.types";
-import type { createChatRepository } from "./chat.repository";
-import type { createProjectRepository } from "../project/project.repository";
-import type { createMemberRepository } from "../member/member.repository";
-import type { createNotificationRepository } from "../notification/notification.repository";
+import { createChatRepository } from "./chat.repository";
+import { createProjectRepository } from "../project/project.repository";
+import { createMemberRepository } from "../member/member.repository";
+import { createNotificationRepository } from "../notification/notification.repository";
 import { db } from "../../../db/connection";
 import { getUserProfilesFromSnapshots } from "../../../shared/identity-snapshot-store";
 
@@ -61,6 +61,9 @@ export const createChatService = (
       }
       const memberSubs = new Set(members.map((m) => m.userSub));
       const memberBySub = new Map(members.map((m) => [m.userSub, m]));
+      const visibleRecipients = channel === "internal"
+        ? members.filter((candidate) => candidate.role !== "client")
+        : members;
 
       const authorSubs = [...new Set(messages.map((m) => m.authorSub).filter((sub): sub is string => Boolean(sub)))];
       const { profiles } = authorSubs.length > 0
@@ -74,7 +77,7 @@ export const createChatService = (
         const required =
           mentioned.length > 0
             ? mentioned.filter((sub) => sub !== msg.authorSub)
-            : members.map((m) => m.userSub).filter((sub) => sub !== msg.authorSub);
+            : visibleRecipients.map((m) => m.userSub).filter((sub) => sub !== msg.authorSub);
         const seenCount = required.filter((sub) => readers.has(sub)).length;
         const isSeen = required.length === 0 ? true : seenCount === required.length;
         const profile = msg.authorSub ? profiles.get(msg.authorSub) : undefined;
@@ -119,14 +122,16 @@ export const createChatService = (
         if (!targetRole) {
           throw new BadRequestError("Solo puedes mencionar participantes del proyecto");
         }
-        // Si el rol está permitido y puede recibir menciones en el canal, incluir la mención.
-        // De lo contrario, se omite silenciosamente para no abortar el envío del mensaje.
-        if (allowedTargetRoles.has(targetRole) && canReceiveMentionInChannel(channel, targetRole)) {
-          mentionSubs.push(mentionedSub);
+        if (!allowedTargetRoles.has(targetRole) || !canReceiveMentionInChannel(channel, targetRole)) {
+          throw new BadRequestError("No puedes mencionar a este participante en el canal seleccionado");
         }
+        mentionSubs.push(mentionedSub);
       }
 
-      const row = await chatRepository.createChatMessage({
+      const row = await db.transaction(async (tx) => {
+      const txChatRepository = createChatRepository(tx);
+      const txNotificationRepository = createNotificationRepository(tx);
+      const row = await txChatRepository.createChatMessage({
         projectId,
         channel,
         messageType: "text",
@@ -135,11 +140,11 @@ export const createChatService = (
         body,
       });
       if (mentionSubs.length > 0) {
-        await chatRepository.createChatMentions(row.id, mentionSubs);
+        await txChatRepository.createChatMentions(row.id, mentionSubs);
       }
       if (mentionSubs.length > 0) {
         const preview = body.trim().slice(0, 240);
-        await notificationRepository.createMentionNotifications(
+        await txNotificationRepository.createMentionNotifications(
           mentionSubs
             .filter((sub) => sub !== actor.sub)
             .map((recipientSub) => ({
@@ -153,10 +158,10 @@ export const createChatService = (
             }))
         );
       }
-      await chatRepository.markChatMessagesRead([
+      await txChatRepository.markChatMessagesRead([
         { messageId: row.id, userSub: actor.sub, readAt: new Date() },
       ]);
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: `chat_${channel}_message_created`,
         resourceType: "project_chat_message",
@@ -166,20 +171,22 @@ export const createChatService = (
       });
 
       const eventType = channel === "internal" ? "chat.message.internal" : "chat.message.external";
-      void collabEvents.emit(eventType, projectId, actor.sub, {
+      await collabEvents.emit(eventType, projectId, actor.sub, {
         messageId: row.id,
         channel,
         body,
-      });
+      }, tx);
 
       if (mentionSubs.length > 0) {
-        void collabEvents.emit("chat.mention", projectId, actor.sub, {
+        await collabEvents.emit("chat.mention", projectId, actor.sub, {
           messageId: row.id,
           channel,
           mentionedSubs: mentionSubs,
           body,
-        });
+        }, tx);
       }
+      return row;
+      });
 
       const { profiles } = await getUserProfilesFromSnapshots([actor.sub]);
       const profile = profiles.get(actor.sub);
@@ -211,6 +218,7 @@ export const createChatService = (
       }
 
       const rowsToMark: string[] = [];
+      let markedUpTo = false;
 
       if (payload.upToMessageId) {
         const target = await chatRepository.findChatMessageByIdInChannel(
@@ -219,25 +227,17 @@ export const createChatService = (
           payload.upToMessageId
         );
         if (target) {
-          const ids = await chatRepository.listChatMessageIdsUpTo(projectId, channel, target.createdAt);
-          rowsToMark.push(...ids);
+          await chatRepository.markChatMessagesReadUpTo(projectId, channel, target.createdAt, actor.sub);
+          await notificationRepository.markMentionNotificationsSeenUpTo(actor.sub, projectId, channel, target.createdAt);
+          markedUpTo = true;
         }
       }
       if (payload.messageIds.length > 0) {
-        const { rows: messages } = await chatRepository.listChatMessagesByChannel({
-          projectId,
-          channel,
-          limit: 1000,
-          offset: 0,
-        });
-        const idsInChannel = new Set(messages.map((m) => m.id));
-        for (const id of payload.messageIds) {
-          if (idsInChannel.has(id)) rowsToMark.push(id);
-        }
+        rowsToMark.push(...await chatRepository.listChatMessageIdsInChannel(projectId, channel, payload.messageIds));
       }
 
       const uniqueIds = [...new Set(rowsToMark)];
-      if (!uniqueIds.length) return { marked: 0 };
+      if (!uniqueIds.length && !markedUpTo) return { marked: 0 };
 
       const CHUNK_SIZE = 500;
       for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {

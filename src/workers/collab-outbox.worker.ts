@@ -3,10 +3,19 @@ import { getLogger } from "../shared/logger";
 import { runCollabOutbox } from "../jobs/run-collab-outbox";
 import { startWorkerHealthcheck } from "../shared/worker-health";
 import { pool } from "../db/connection";
-import { getRedisConnection } from "../shared/redis";
+import { getRedisConnection, initRedis } from "../shared/redis";
 import { serviceMetrics } from "../app";
+import { pruneReadNotifications } from "../jobs/prune-notifications";
 
 const logger = getLogger();
+
+if (!env.REDIS_URL) {
+  throw new Error("REDIS_URL es requerida para el worker de outbox de colaboración");
+}
+
+// Los workers se ejecutan en un proceso independiente del servidor HTTP, por
+// lo que deben crear su propia conexión antes de consultar o publicar eventos.
+initRedis(env.REDIS_URL);
 
 logger.info(
   { intervalMs: env.COLLAB_OUTBOX_INTERVAL_MS, topic: "worker:collab-outbox" },
@@ -18,6 +27,7 @@ const healthcheck = startWorkerHealthcheck("collab-outbox-worker", {
   pool,
   redis: getRedisConnection(),
 });
+let lastNotificationPruneAt = 0;
 
 const tick = async () => {
   try {
@@ -30,6 +40,11 @@ const tick = async () => {
       { worker: "collab-outbox" },
       pending ?? 0
     );
+    if (Date.now() - lastNotificationPruneAt >= env.NOTIFICATION_RETENTION_INTERVAL_MS) {
+      const removed = await pruneReadNotifications(env.NOTIFICATION_RETENTION_DAYS);
+      lastNotificationPruneAt = Date.now();
+      logger.info({ removed, retentionDays: env.NOTIFICATION_RETENTION_DAYS }, "notificaciones leídas depuradas");
+    }
   } catch (err) {
     logger.error({ err, topic: "worker:collab-outbox" }, "error en ciclo");
   }

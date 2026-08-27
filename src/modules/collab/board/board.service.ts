@@ -9,10 +9,10 @@ import { assertProductionObjectRegistered, assertAllowedUploadMime } from "../sh
 import { createAuditRepository } from "../repository/audit.repository";
 import { sanitizeFileName } from "../../../shared/sanitize-filename";
 import type { GlobalRole } from "../collab.types";
-import type { createBoardRepository } from "./board.repository";
-import type { createProjectRepository } from "../project/project.repository";
-import type { createMemberRepository } from "../member/member.repository";
-import type { createFileRepository } from "../file/file.repository";
+import { createBoardRepository } from "./board.repository";
+import { createProjectRepository } from "../project/project.repository";
+import { createMemberRepository } from "../member/member.repository";
+import { createFileRepository } from "../file/file.repository";
 import { db } from "../../../db/connection";
 
 type Actor = {
@@ -48,23 +48,25 @@ export const createBoardService = (
       if (!canManageProject(actor.role, member?.role)) {
         throw new ForbiddenError("Solo administrador crea/edita columnas y flujo");
       }
-      const row = await boardRepository.createTaskColumn({
-        projectId,
-        key: payload.key as never,
-        title: payload.title,
-        position: payload.position,
-        isClientVisible: payload.isClientVisible,
-        isDefault: false,
+      return db.transaction(async (tx) => {
+        const row = await createBoardRepository(tx).createTaskColumnAtPosition({
+          projectId,
+          key: payload.key as never,
+          title: payload.title,
+          position: payload.position,
+          isClientVisible: payload.isClientVisible,
+          isDefault: false,
+        });
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "project_column_created",
+          resourceType: "project_task_column",
+          resourceId: row.id,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        });
+        return row;
       });
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "project_column_created",
-        resourceType: "project_task_column",
-        resourceId: row.id,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-      });
-      return row;
     },
 
     listTaskColumns: async (actor: Actor, projectId: string) => {
@@ -83,17 +85,26 @@ export const createBoardService = (
       const { member } = await assertProjectAccess(accessRepo, actor, column.projectId);
       if (actor.role !== "admin") throw new ForbiddenError("Solo admin edita columnas");
       if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin edita columnas");
-      const row = await boardRepository.updateTaskColumnById(columnId, patch);
-      if (!row) throw new NotFoundError("Columna no encontrada");
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "project_column_updated",
-        resourceType: "project_task_column",
-        resourceId: columnId,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
+      return db.transaction(async (tx) => {
+        const txBoardRepository = createBoardRepository(tx);
+        if (patch.position !== undefined) {
+          await txBoardRepository.moveTaskColumnToPosition(column, patch.position);
+        }
+        const row = await txBoardRepository.updateTaskColumnById(columnId, {
+          ...patch,
+          position: undefined,
+        });
+        if (!row) throw new NotFoundError("Columna no encontrada");
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "project_column_updated",
+          resourceType: "project_task_column",
+          resourceId: columnId,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        });
+        return row;
       });
-      return row;
     },
 
     createTask: async (
@@ -134,7 +145,11 @@ export const createBoardService = (
       }
       const completedAt = ProjectTask.isCompleted(column.key, calculatedProgress) ? new Date() : null;
 
-      const task = await boardRepository.createTask({
+      return db.transaction(async (tx) => {
+      const txBoardRepository = createBoardRepository(tx);
+      const txProjectRepository = createProjectRepository(tx);
+      const txMemberRepository = createMemberRepository(tx);
+      const task = await txBoardRepository.createTask({
         projectId,
         columnId: payload.columnId,
         title: payload.title,
@@ -150,19 +165,19 @@ export const createBoardService = (
         completedAt,
       });
       if (payload.subtasks?.length) {
-        await boardRepository.upsertSubtasks(task.id, payload.subtasks);
+        await txBoardRepository.upsertSubtasks(task.id, payload.subtasks);
       }
       if (payload.assignees?.length) {
         const resolvedAssignees = await resolveAssigneeEmails(
-          memberRepository as any,
+          txMemberRepository as any,
           actor,
           projectId,
           payload.assignees
         );
-        await boardRepository.upsertTaskAssignees(task.id, resolvedAssignees);
+        await txBoardRepository.upsertTaskAssignees(task.id, resolvedAssignees);
       }
-      await syncProjectSummary(projectRepository as any, projectId, project.type);
-      await createAuditRepository(db).createAuditLog({
+      await syncProjectSummary(txProjectRepository, projectId);
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "project_task_created",
         resourceType: "project_task",
@@ -170,7 +185,17 @@ export const createBoardService = (
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
       });
+      for (const assignee of payload.assignees ?? []) {
+        if (assignee.userSub !== actor.sub) {
+          await collabEvents.emit("task.assigned", projectId, actor.sub, {
+            taskId: task.id,
+            taskTitle: task.title,
+            assigneeSub: assignee.userSub,
+          }, tx);
+        }
+      }
       return task;
+      });
     },
 
     listTasksByProject: async (
@@ -219,6 +244,9 @@ export const createBoardService = (
         });
       }
       if (actor.role === "client" && patch.columnId) throw new ForbiddenError("Cliente no puede mover tareas");
+      const previousAssigneeSubs = patch.assignees !== undefined
+        ? (await boardRepository.listTaskAssignees(taskId)).map((assignee) => assignee.userSub)
+        : [];
 
       const primaryAssigneeSub =
         patch.assignees !== undefined ? (patch.assignees[0]?.userSub ?? null) : undefined;
@@ -256,7 +284,11 @@ export const createBoardService = (
         ? task.completedAt ?? new Date()
         : null;
 
-      const updated = await boardRepository.updateTaskById(taskId, {
+      return db.transaction(async (tx) => {
+      const txBoardRepository = createBoardRepository(tx);
+      const txProjectRepository = createProjectRepository(tx);
+      const txMemberRepository = createMemberRepository(tx);
+      const updated = await txBoardRepository.updateTaskById(taskId, {
         columnId: patch.columnId,
         title: patch.title,
         description: patch.description,
@@ -271,26 +303,26 @@ export const createBoardService = (
       });
       if (!updated) throw new NotFoundError("Tarea no encontrada");
       if (patch.subtasks !== undefined) {
-        await boardRepository.upsertSubtasks(taskId, patch.subtasks);
+        await txBoardRepository.upsertSubtasks(taskId, patch.subtasks);
       }
       if (patch.assignees !== undefined) {
         const resolvedAssignees = await resolveAssigneeEmails(
-          memberRepository as any,
+          txMemberRepository as any,
           actor,
           task.projectId,
           patch.assignees
         );
-        await boardRepository.upsertTaskAssignees(taskId, resolvedAssignees);
+        await txBoardRepository.upsertTaskAssignees(taskId, resolvedAssignees);
       }
       const progressChanged =
         patch.columnId !== undefined ||
         patch.checklistProgress !== undefined ||
         patch.subtasks !== undefined;
       if (progressChanged) {
-        await syncProjectSummary(projectRepository as any, task.projectId, project.type);
+        await syncProjectSummary(txProjectRepository, task.projectId);
       }
 
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "project_task_updated",
         resourceType: "project_task",
@@ -300,28 +332,31 @@ export const createBoardService = (
       });
 
       if (patch.columnId && patch.columnId !== task.columnId) {
-        void collabEvents.emit("task.moved", task.projectId, actor.sub, {
+        const assigneeSubs = (await txBoardRepository.listTaskAssignees(taskId)).map((assignee) => assignee.userSub);
+        await collabEvents.emit("task.moved", task.projectId, actor.sub, {
           taskId: task.id,
           taskTitle: updated.title,
           fromColumnKey: currentColumn.key,
           toColumnKey: targetColumn.key,
           assigneeSub: updated.assigneeSub ?? undefined,
-        });
+          assigneeSubs,
+          clientVisible: updated.isClientVisible,
+        }, tx);
       }
 
       if (patch.assignees !== undefined) {
-        const newPrimary = patch.assignees[0]?.userSub;
-        if (newPrimary && newPrimary !== task.assigneeSub) {
-          void collabEvents.emit("task.assigned", task.projectId, actor.sub, {
+        for (const assignee of patch.assignees.filter((candidate) => !previousAssigneeSubs.includes(candidate.userSub))) {
+          if (assignee.userSub === actor.sub) continue;
+          await collabEvents.emit("task.assigned", task.projectId, actor.sub, {
             taskId: task.id,
             taskTitle: updated.title,
-            assigneeSub: newPrimary,
-            previousAssigneeSub: task.assigneeSub ?? undefined,
-          });
+            assigneeSub: assignee.userSub,
+          }, tx);
         }
       }
 
       return updated;
+      });
     },
 
     listTaskAssignees: async (actor: Actor, taskId: string) => {
@@ -357,13 +392,15 @@ export const createBoardService = (
       if (actor.role === "client" && !task.isClientVisible) {
         throw new ForbiddenError("No tienes acceso a esta tarea");
       }
-      const comment = await boardRepository.createTaskComment({
+      return db.transaction(async (tx) => {
+      const txBoardRepository = createBoardRepository(tx);
+      const comment = await txBoardRepository.createTaskComment({
         taskId,
         authorSub: actor.sub,
         authorEmail,
         content,
       });
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "task_comment_created",
         resourceType: "project_task_comment",
@@ -371,7 +408,15 @@ export const createBoardService = (
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
       });
+      const assigneeSubs = (await txBoardRepository.listTaskAssignees(taskId)).map((assignee) => assignee.userSub);
+      await collabEvents.emit("task.comment.created", task.projectId, actor.sub, {
+        taskId: task.id,
+        taskTitle: task.title,
+        assigneeSubs,
+        clientVisible: task.isClientVisible,
+      }, tx);
       return comment;
+      });
     },
 
     listTaskFiles: async (actor: Actor, taskId: string) => {
@@ -381,7 +426,8 @@ export const createBoardService = (
       if (actor.role === "client" && !task.isClientVisible) {
         throw new ForbiddenError("No tienes acceso a esta tarea");
       }
-      return fileRepository.listTaskFiles(taskId);
+      const files = await fileRepository.listTaskFiles(taskId);
+      return actor.role === "client" ? files.filter((file) => file.isClientVisible) : files;
     },
 
     uploadTaskFileMetadata: async (
@@ -419,7 +465,9 @@ export const createBoardService = (
       const MAX_BYTES = 25 * 1024 * 1024;
       if (physicalMeta.sizeBytes > MAX_BYTES) throw new BadRequestError("El archivo supera el límite de 25 MB");
       assertAllowedUploadMime(physicalMeta.mimeType, fileName);
-      const file = await boardRepository.createFileForTask({
+      return db.transaction(async (tx) => {
+      const txBoardRepository = createBoardRepository(tx);
+      const file = await txBoardRepository.createFileForTask({
         projectId,
         taskId,
         title: payload.title,
@@ -437,7 +485,7 @@ export const createBoardService = (
         createdBySub: actor.sub,
         createdByEmail: payload.authorEmail,
       });
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "task_file_uploaded",
         resourceType: "project_file",
@@ -446,7 +494,13 @@ export const createBoardService = (
         userAgent: meta.userAgent,
         details: { taskId, fileName: payload.fileName, sizeBytes: payload.sizeBytes },
       });
+      await collabEvents.emit("file.uploaded", projectId, actor.sub, {
+        fileId: file.id,
+        fileName: file.fileName,
+        isClientVisible: file.isClientVisible,
+      }, tx);
       return file;
+      });
     },
   };
 };

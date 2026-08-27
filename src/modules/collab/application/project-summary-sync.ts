@@ -1,21 +1,11 @@
-import type { ProjectType } from "../collab.types";
-import { ProjectAggregate } from "../domain/project-aggregate";
-
 type ProjectSummaryRepo = {
-  listTaskStatusSnapshotsByProject: (projectId: string) => Promise<any[]>;
-  updateProjectSummary: (projectId: string, summary: any) => Promise<any>;
+  syncProjectStatusAndProgress: (projectId: string) => Promise<void>;
 };
 
-export const syncProjectSummary = async (
-  repo: ProjectSummaryRepo,
-  projectId: string,
-  projectType: ProjectType,
-) => {
-  const taskSnapshots = await repo.listTaskStatusSnapshotsByProject(projectId);
-  const aggregate = ProjectAggregate.fromSnapshots(projectType, taskSnapshots);
-  const summary = aggregate.createStatusSnapshot();
-
-  await repo.updateProjectSummary(projectId, summary);
-
-  return summary;
-};
+/**
+ * Recalcula el resumen sin hidratar todas las tareas en el proceso. La
+ * agregación vive en PostgreSQL para que el coste sea constante en memoria,
+ * incluso en proyectos con tableros grandes.
+ */
+export const syncProjectSummary = (repo: ProjectSummaryRepo, projectId: string) =>
+  repo.syncProjectStatusAndProgress(projectId);

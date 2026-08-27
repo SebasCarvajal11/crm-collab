@@ -171,10 +171,10 @@ const MentionItemSchema = z.union([
 ]);
 
 export const CreateChatMessageSchema = z.object({
-  body: z.string().optional(),
-  content: z.string().optional(),
+  body: z.string().trim().min(1).max(5_000).optional(),
+  content: z.string().trim().min(1).max(5_000).optional(),
   mentions: z.array(MentionItemSchema).max(25).optional(),
-}).refine((val) => val.body || val.content, {
+}).refine((val) => Boolean(val.body || val.content), {
   message: "Debes enviar body o content",
 }).transform((val) => ({
   body: val.body ?? val.content ?? "",

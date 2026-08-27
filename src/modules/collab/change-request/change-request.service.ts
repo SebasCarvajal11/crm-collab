@@ -4,12 +4,12 @@ import { assertProjectAccess } from "../shared/project-access";
 import { createAuditRepository } from "../repository/audit.repository";
 import type { GlobalRole } from "../collab.types";
 import { db } from "../../../db/connection";
-import type { createChangeRequestRepository } from "./change-request.repository";
-import type { createProjectRepository } from "../project/project.repository";
-import type { createMemberRepository } from "../member/member.repository";
-import type { createChatRepository } from "../chat/chat.repository";
-import type { createBriefRepository } from "../brief/brief.repository";
-import type { createBoardRepository } from "../board/board.repository";
+import { createChangeRequestRepository } from "./change-request.repository";
+import { createProjectRepository } from "../project/project.repository";
+import { createMemberRepository } from "../member/member.repository";
+import { createChatRepository } from "../chat/chat.repository";
+import { createBriefRepository } from "../brief/brief.repository";
+import { createBoardRepository } from "../board/board.repository";
 
 type Actor = {
   sub: string;
@@ -41,16 +41,22 @@ export const createChangeRequestService = (
       payload: { taskId?: string; title?: string; description: string },
       meta: RequestMeta
     ) => {
+      await assertProjectAccess(accessRepo, actor, projectId);
+      if (actor.role !== "client") throw new ForbiddenError("Solo cliente solicita ajuste menor");
+      return db.transaction(async (tx) => {
+      const txBoardRepository = createBoardRepository(tx);
+      const txChangeRequestRepository = createChangeRequestRepository(tx);
+      const txChatRepository = createChatRepository(tx);
       let taskId = payload.taskId;
       if (!taskId) {
-        const tasksResult = await boardRepository.listTasksByProject({ projectId, limit: 1, offset: 0 });
+        const tasksResult = await txBoardRepository.listTasksByProject({ projectId, limit: 1, offset: 0 });
         if (tasksResult.rows.length > 0) {
           taskId = tasksResult.rows[0].id;
         } else {
-          const columns = await boardRepository.listTaskColumnsByProject(projectId);
+          const columns = await txBoardRepository.listTaskColumnsByProject(projectId);
           const columnId = columns[0]?.id;
           if (!columnId) throw new BadRequestError("No hay columnas en el proyecto para crear una tarea");
-          const defaultTask = await boardRepository.createTask({
+          const defaultTask = await txBoardRepository.createTask({
             projectId,
             columnId,
             title: "Tarea Automática para Ajuste",
@@ -62,15 +68,14 @@ export const createChangeRequestService = (
           taskId = defaultTask.id;
         }
       }
-      const task = await boardRepository.findTaskById(taskId);
+      const task = await txBoardRepository.findTaskById(taskId);
       if (!task || task.projectId !== projectId) throw new NotFoundError("Tarea no encontrada");
-      if (actor.role !== "client") throw new ForbiddenError("Solo cliente solicita ajuste menor");
-      const openMinor = await changeRequestRepository.listChangeRequestsByProject(projectId, "minor");
+      const openMinor = await txChangeRequestRepository.listChangeRequestsByProject(projectId, "minor");
       if (openMinor.some((r) => r.taskId === taskId && r.status === "open")) {
         throw new BadRequestError("Ya existe un ajuste menor abierto para esta tarea");
       }
       const title = payload.title || `Ajuste menor: ${payload.description.slice(0, 50)}`;
-      const request = await changeRequestRepository.createChangeRequest({
+      const request = await txChangeRequestRepository.createChangeRequest({
         projectId,
         taskId: taskId,
         type: "minor",
@@ -80,7 +85,7 @@ export const createChangeRequestService = (
         description: payload.description,
         justification: null,
       });
-      await chatRepository.createChatMessage({
+      await txChatRepository.createChatMessage({
         projectId,
         channel: "external",
         messageType: "minor_request",
@@ -88,7 +93,7 @@ export const createChangeRequestService = (
         body: `Solicitud de ajuste menor: ${title}`,
         metadata: { changeRequestId: request.id, taskId: taskId },
       });
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "minor_change_requested",
         resourceType: "project_change_request",
@@ -97,16 +102,17 @@ export const createChangeRequestService = (
         userAgent: meta.userAgent,
       });
 
-      void collabEvents.emit("change_request.minor.created", projectId, actor.sub, {
+      await collabEvents.emit("change_request.minor.created", projectId, actor.sub, {
         changeRequestId: request.id,
         taskId: taskId,
         taskTitle: task.title,
         requestedBySub: actor.sub,
         title: title,
         description: payload.description,
-      });
+      }, tx);
 
       return request;
+      });
     },
 
     createFormalChangeRequest: async (
@@ -118,7 +124,10 @@ export const createChangeRequestService = (
       await assertProjectAccess(accessRepo, actor, projectId);
       const title = payload.title || "Solicitud de Cambio Formal";
       const justification = payload.justification || "Justificación predeterminada";
-      const request = await changeRequestRepository.createChangeRequest({
+      return db.transaction(async (tx) => {
+      const txChangeRequestRepository = createChangeRequestRepository(tx);
+      const txChatRepository = createChatRepository(tx);
+      const request = await txChangeRequestRepository.createChangeRequest({
         projectId,
         taskId: payload.taskId ?? null,
         type: "formal",
@@ -128,7 +137,7 @@ export const createChangeRequestService = (
         description: payload.description,
         justification: justification,
       });
-      await chatRepository.createChatMessage({
+      await txChatRepository.createChatMessage({
         projectId,
         channel: "external",
         messageType: "formal_request",
@@ -136,7 +145,7 @@ export const createChangeRequestService = (
         body: `Solicitud de cambio formal: ${title}`,
         metadata: { changeRequestId: request.id },
       });
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "formal_change_requested",
         resourceType: "project_change_request",
@@ -145,16 +154,17 @@ export const createChangeRequestService = (
         userAgent: meta.userAgent,
       });
 
-      void collabEvents.emit("change_request.formal.created", projectId, actor.sub, {
+      await collabEvents.emit("change_request.formal.created", projectId, actor.sub, {
         changeRequestId: request.id,
         taskId: payload.taskId,
         requestedBySub: actor.sub,
         title: payload.title,
         description: payload.description,
         justification: payload.justification,
-      });
+      }, tx);
 
       return request;
+      });
     },
 
     resolveChangeRequest: async (
@@ -180,14 +190,17 @@ export const createChangeRequestService = (
           );
         }
       }
-      const updated = await changeRequestRepository.updateChangeRequestById(changeRequestId, {
+      return db.transaction(async (tx) => {
+      const txChangeRequestRepository = createChangeRequestRepository(tx);
+      const txBriefRepository = createBriefRepository(tx);
+      const updated = await txChangeRequestRepository.updateChangeRequestById(changeRequestId, {
         status,
         resolvedBySub: actor.sub,
         escalatedByWorkerSub: status === "escalated" ? actor.sub : undefined,
       });
       if (!updated) throw new NotFoundError("Solicitud no encontrada");
       if (req.type === "formal" && status === "approved") {
-        await briefRepository.createBriefChangeLog({
+        await txBriefRepository.createBriefChangeLog({
           projectId,
           requestedBySub: req.requestedBySub,
           approvedBySub: actor.sub,
@@ -195,7 +208,7 @@ export const createChangeRequestService = (
           sourceChangeRequestId: req.id,
         });
       }
-      await createAuditRepository(db).createAuditLog({
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "change_request_resolved",
         resourceType: "project_change_request",
@@ -214,23 +227,27 @@ export const createChangeRequestService = (
             : null;
 
         if (eventType) {
-          void collabEvents.emit(eventType, projectId, actor.sub, {
+          await collabEvents.emit(eventType, projectId, actor.sub, {
             changeRequestId: req.id,
             taskId: req.taskId!,
             status: status as "accepted" | "rejected" | "escalated",
             resolvedBySub: actor.sub,
-          });
+            requestedBySub: req.requestedBySub,
+            title: req.title,
+          }, tx);
         }
-      } else if (req.type === "formal" && status === "approved") {
-        void collabEvents.emit("change_request.formal.approved", projectId, actor.sub, {
+      } else if (req.type === "formal" && (status === "approved" || status === "rejected")) {
+        await collabEvents.emit(status === "approved" ? "change_request.formal.approved" : "change_request.formal.rejected", projectId, actor.sub, {
           changeRequestId: req.id,
           approvedBySub: actor.sub,
           title: req.title,
           affectsScope: true,
-        });
+          requestedBySub: req.requestedBySub,
+        }, tx);
       }
 
       return updated;
+      });
     },
 
     listFormalChangeLog: async (

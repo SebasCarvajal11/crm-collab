@@ -111,7 +111,10 @@ export const projects = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [uniqueIndex("project_name_admin_uq").on(t.adminResponsibleSub, t.name)]
+  (t) => [
+    uniqueIndex("project_name_admin_uq").on(t.adminResponsibleSub, t.name),
+    index("idx_projects_active_updated").on(t.isArchived, t.updatedAt),
+  ]
 );
 
 export const projectMembers = collabSchema.table(
@@ -127,7 +130,10 @@ export const projectMembers = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.userSub] })]
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.userSub] }),
+    index("idx_project_members_user_project").on(t.userSub, t.projectId),
+  ]
 );
 
 export const projectTaskColumns = collabSchema.table(
@@ -178,6 +184,8 @@ export const projectTasks = collabSchema.table(
   (t) => [
     index("idx_project_tasks_project_id").on(t.projectId),
     index("idx_project_tasks_project_column_position").on(t.projectId, t.columnId, t.position, t.createdAt),
+    index("idx_project_tasks_project_position_created").on(t.projectId, t.position, t.createdAt),
+    index("idx_project_tasks_project_client_position").on(t.projectId, t.isClientVisible, t.position, t.createdAt),
   ]
 );
 
@@ -271,6 +279,38 @@ export const projectMentionNotifications = collabSchema.table(
   ]
 );
 
+/**
+ * Inbox persistente de actividad de proyecto. A diferencia de las menciones,
+ * no depende de un mensaje de chat y conserva la visibilidad que tenía el
+ * recurso cuando se generó el evento.
+ */
+export const projectActivityNotifications = collabSchema.table(
+  "project_activity_notifications",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    eventId: uuid("event_id").notNull(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    recipientSub: uuid("recipient_sub").notNull(),
+    actorSub: uuid("actor_sub"),
+    channel: chatChannelEnum("channel").notNull(),
+    kind: varchar("kind", { length: 80 }).notNull(),
+    title: varchar("title", { length: 180 }).notNull(),
+    body: varchar("body", { length: 300 }).notNull(),
+    resourceType: varchar("resource_type", { length: 80 }).notNull(),
+    resourceId: varchar("resource_id", { length: 255 }),
+    isSeen: boolean("is_seen").default(false).notNull(),
+    seenAt: timestamp("seen_at", { mode: "date" }),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_activity_notification_event_recipient").on(t.eventId, t.recipientSub),
+    index("idx_activity_notification_recipient_seen_created").on(t.recipientSub, t.isSeen, t.createdAt),
+    index("idx_activity_notification_project_created").on(t.projectId, t.createdAt),
+  ]
+);
+
 export const projectFiles = collabSchema.table(
   "project_files",
   {
@@ -301,7 +341,9 @@ export const projectFiles = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [
+    uniqueIndex("uq_project_files_storage_path").on(t.storagePath),
     index("idx_project_files_project_id").on(t.projectId),
+    index("idx_project_files_project_client_created").on(t.projectId, t.isClientVisible, t.createdAt),
     index("idx_project_files_task_id").on(t.taskId),
   ]
 );
@@ -370,7 +412,11 @@ export const projectChangeRequests = collabSchema.table(
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     resolvedAt: timestamp("resolved_at", { mode: "date" }),
   },
-  (t) => [index("idx_project_change_requests_project_id").on(t.projectId)]
+  (t) => [
+    index("idx_project_change_requests_project_id").on(t.projectId),
+    index("idx_project_change_requests_project_type_created").on(t.projectId, t.type, t.createdAt),
+    index("idx_project_change_requests_timeline").on(t.projectId, t.status, t.resolvedAt),
+  ]
 );
 
 export const projectBriefChangeLog = collabSchema.table(

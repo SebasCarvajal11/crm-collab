@@ -1,4 +1,5 @@
 import { NotFoundError, ForbiddenError, BadRequestError } from "../../../shared/middlewares/error-handler.middleware";
+import type { ProjectMemberRole } from "../collab.types";
 
 interface ProjectAccessRepo {
   findProjectById: (projectId: string) => Promise<any>;
@@ -52,5 +53,19 @@ export const assertWorkerOnlyAssignments = async (
     if (!assignableSubs.has(subtask.assigneeSub)) {
       throw new BadRequestError("Las subtareas solo pueden asignarse a trabajadores o administradores del proyecto");
     }
+  }
+};
+
+/** Prevent a project-local role from granting capabilities above the identity role. */
+export const assertProjectMemberRoleCompatibility = (
+  identityRole: string,
+  projectRole: ProjectMemberRole
+) => {
+  const compatible =
+    (projectRole === "admin" && identityRole === "admin") ||
+    (projectRole === "worker" && (identityRole === "worker" || identityRole === "admin")) ||
+    (projectRole === "client" && identityRole === "client");
+  if (!compatible) {
+    throw new BadRequestError("El rol asignado en el proyecto no es compatible con la identidad del usuario");
   }
 };

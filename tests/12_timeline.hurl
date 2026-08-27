@@ -79,32 +79,32 @@ GET {{base_url}}/api/v1/collab/projects/{{timeline_project_id}}/timeline
 Authorization: Bearer {{admin_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.data.items" isCollection
+jsonpath "$.data" isCollection
 
 # --- Timeline con paginacion ---
 GET {{base_url}}/api/v1/collab/projects/{{timeline_project_id}}/timeline?page=1&limit=5
 Authorization: Bearer {{admin_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.data.items" isCollection
+jsonpath "$.data" isCollection
 
 # --- Timeline de archivos ---
 GET {{base_url}}/api/v1/collab/projects/{{timeline_project_id}}/files/timeline
 Authorization: Bearer {{admin_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.data.items" isCollection
+jsonpath "$.data" isCollection
 
 # --- Worker: Accede al timeline ---
 GET {{base_url}}/api/v1/collab/projects/{{timeline_project_id}}/timeline
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.data.items" isCollection
+jsonpath "$.data" isCollection
 
 # --- Client: Accede al timeline ---
 GET {{base_url}}/api/v1/collab/projects/{{timeline_project_id}}/timeline
 Authorization: Bearer {{client_token}}
 HTTP 200
 [Asserts]
-jsonpath "$.data.items" isCollection
+jsonpath "$.data" isCollection

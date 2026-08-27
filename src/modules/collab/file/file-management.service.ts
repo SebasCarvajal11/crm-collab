@@ -5,10 +5,10 @@ import { canMoveTasks } from "../shared/guards";
 import { assertProjectAccess } from "../shared/project-access";
 import { createAuditRepository } from "../repository/audit.repository";
 import type { GlobalRole } from "../collab.types";
-import type { createFileRepository } from "./file.repository";
-import type { createProjectRepository } from "../project/project.repository";
-import type { createMemberRepository } from "../member/member.repository";
-import type { createBoardRepository } from "../board/board.repository";
+import { createFileRepository } from "./file.repository";
+import { createProjectRepository } from "../project/project.repository";
+import { createMemberRepository } from "../member/member.repository";
+import { createBoardRepository } from "../board/board.repository";
 import { db } from "../../../db/connection";
 
 type Actor = {
@@ -54,10 +54,13 @@ export const createFileManagementService = (
       if (!isAuthorized) {
         throw new ForbiddenError("Solo administradores o clientes pueden aprobar archivos del proyecto");
       }
-      const updated = await fileRepository.markFileApproved(fileId, actor.sub);
+      return db.transaction(async (tx) => {
+      const txFileRepository = createFileRepository(tx);
+      const txProjectRepository = createProjectRepository(tx);
+      const updated = await txFileRepository.markFileApproved(fileId, actor.sub);
       if (!updated) throw new NotFoundError("Archivo no encontrado");
-      await projectRepository.updateProjectById(file.projectId, { latestApprovedFileId: fileId });
-      await createAuditRepository(db).createAuditLog({
+      await txProjectRepository.updateProjectById(file.projectId, { latestApprovedFileId: fileId });
+      await createAuditRepository(tx).createAuditLog({
         actorSub: actor.sub,
         action: "project_file_approved",
         resourceType: "project_file",
@@ -65,13 +68,14 @@ export const createFileManagementService = (
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
       });
-      void collabEvents.emit("file.approved", file.projectId, actor.sub, {
+      await collabEvents.emit("file.approved", file.projectId, actor.sub, {
         fileId: file.id,
         fileName: file.fileName,
         folder: file.folder,
         approvedBySub: actor.sub,
-      });
+      }, tx);
       return updated;
+      });
     },
 
     getFileAccess: async (actor: Actor, fileId: string, forceDownload: boolean) => {
@@ -125,24 +129,26 @@ export const createFileManagementService = (
         taskId = task.id;
       }
 
-      const updated = await fileRepository.updateFileById(fileId, {
-        title: patch.title,
-        description: patch.description,
-        taskId,
-        isClientVisible: patch.isClientVisible,
-      });
-      if (!updated) throw new NotFoundError("Archivo no encontrado");
+      return db.transaction(async (tx) => {
+        const updated = await createFileRepository(tx).updateFileById(fileId, {
+          title: patch.title,
+          description: patch.description,
+          taskId,
+          isClientVisible: patch.isClientVisible,
+        });
+        if (!updated) throw new NotFoundError("Archivo no encontrado");
 
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "project_file_updated",
-        resourceType: "project_file",
-        resourceId: fileId,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        details: { taskId: taskId ?? null },
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "project_file_updated",
+          resourceType: "project_file",
+          resourceId: fileId,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          details: { taskId: taskId ?? null },
+        });
+        return updated;
       });
-      return updated;
     },
 
     listFilesWithTaskInfo: async (actor: Actor, projectId: string) => {
@@ -160,8 +166,8 @@ export const createFileManagementService = (
       if (!file) {
         throw new NotFoundError("Archivo no registrado en colaboración");
       }
-      await assertProjectAccess(accessRepo, actor, file.projectId);
-      if (actor.role === "client" && !file.isClientVisible) {
+      const { member } = await assertProjectAccess(accessRepo, actor, file.projectId);
+      if ((actor.role === "client" || member?.role === "client") && !file.isClientVisible) {
         throw new ForbiddenError("No tienes permiso para este archivo");
       }
     },

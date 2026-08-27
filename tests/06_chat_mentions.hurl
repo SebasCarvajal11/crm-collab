@@ -5,8 +5,8 @@
 # - Admin menciona a worker
 # - Worker menciona a client
 # - Client menciona a worker
-# - Client NO puede mencionar a otro client (403)
-# - Mencion de usuario inexistente (ignorada)
+# - Client no puede usar el chat interno (403)
+# - Client no puede mencionar a un client (400)
 # ============================================================
 
 # Login
@@ -118,14 +118,24 @@ Content-Type: application/json
 }
 HTTP 403
 
-# --- Verificar notificaciones de menciones ---
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread
+# --- Client: no puede mencionar a un cliente, incluso a sí mismo ---
+POST {{base_url}}/api/v1/collab/projects/{{mention_project_id}}/chat/external
+Authorization: Bearer {{client_token}}
+Content-Type: application/json
+{
+  "content": "Mención no permitida",
+  "mentions": ["{{client_subject}}"]
+}
+HTTP 400
+
+# --- Verificar notificaciones unificadas ---
+GET {{base_url}}/api/v1/collab/notifications/unread
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Asserts]
 jsonpath "$.data" isCollection
 
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread/count
+GET {{base_url}}/api/v1/collab/notifications/unread/count
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Asserts]

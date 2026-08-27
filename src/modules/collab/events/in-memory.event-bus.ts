@@ -2,6 +2,7 @@ import type { CollabEvent, CollabEventType, CollabEventPayload } from "./event.t
 import type { EventBus, EventHandler } from "./event-bus.port";
 import { COLLAB_EVENT_CONTRACT_VERSION } from "@sebascarvajal11/cima-contracts/collab-project-events";
 import { getLogger } from "../../../shared/logger";
+import { v7 as uuidv7 } from "uuid";
 
 const logger = getLogger();
 
@@ -27,6 +28,7 @@ export class InMemoryEventBus implements EventBus {
     tx?: any
   ): Promise<void> {
     const event: CollabEvent<T> = {
+      id: uuidv7(),
       version: 1,
       contractVersion: COLLAB_EVENT_CONTRACT_VERSION,
       type: eventType,

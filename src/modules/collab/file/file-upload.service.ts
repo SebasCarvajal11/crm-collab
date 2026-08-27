@@ -9,8 +9,9 @@ import {
 } from "../shared/upload-helpers";
 import { assertProjectAccess } from "../shared/project-access";
 import { createAuditRepository } from "../repository/audit.repository";
+import { collabEvents } from "../events";
 import type { GlobalRole } from "../collab.types";
-import type { createFileRepository } from "./file.repository";
+import { createFileRepository } from "./file.repository";
 import type { createProjectRepository } from "../project/project.repository";
 import type { createMemberRepository } from "../member/member.repository";
 import type { createBoardRepository } from "../board/board.repository";
@@ -75,33 +76,41 @@ export const createFileUploadService = (
         throw new BadRequestError("El archivo supera el límite de 25 MB");
       }
       assertAllowedUploadMime(physicalMeta.mimeType, fileName);
-      const latest = await fileRepository.findLatestVersion(projectId, fileName);
-      const row = await fileRepository.createFile({
-        projectId,
-        title: payload.title ?? null,
-        description: payload.description ?? null,
-        origin: payload.origin,
-        folder: payload.folder,
-        fileName,
-        storagePath: payload.storagePath,
-        mimeType: physicalMeta.mimeType,
-        sizeBytes: physicalMeta.sizeBytes,
-        version: (latest?.version ?? 0) + 1,
-        isActive: true,
-        isClientVisible: payload.isClientVisible,
-        createdBySub: actor.sub,
-        createdByEmail: actor.email,
+      return db.transaction(async (tx) => {
+        const txFileRepository = createFileRepository(tx);
+        const latest = await txFileRepository.findLatestVersion(projectId, fileName);
+        const row = await txFileRepository.createFile({
+          projectId,
+          title: payload.title ?? null,
+          description: payload.description ?? null,
+          origin: payload.origin,
+          folder: payload.folder,
+          fileName,
+          storagePath: payload.storagePath,
+          mimeType: physicalMeta.mimeType,
+          sizeBytes: physicalMeta.sizeBytes,
+          version: (latest?.version ?? 0) + 1,
+          isActive: true,
+          isClientVisible: payload.isClientVisible,
+          createdBySub: actor.sub,
+          createdByEmail: actor.email,
+        });
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "project_file_uploaded",
+          resourceType: "project_file",
+          resourceId: row.id,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          details: { folder: row.folder, version: row.version },
+        });
+        await collabEvents.emit("file.uploaded", projectId, actor.sub, {
+          fileId: row.id,
+          fileName: row.fileName,
+          isClientVisible: row.isClientVisible,
+        }, tx);
+        return row;
       });
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "project_file_uploaded",
-        resourceType: "project_file",
-        resourceId: row.id,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        details: { folder: row.folder, version: row.version },
-      });
-      return row;
     },
 
     generateProjectFileUploadUrl: async (

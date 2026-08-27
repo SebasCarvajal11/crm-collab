@@ -72,14 +72,21 @@ Content-Type: application/json
 HTTP 201
 
 # --- Worker: Lista notificaciones no leidas ---
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread
+GET {{base_url}}/api/v1/collab/notifications/unread
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Asserts]
 jsonpath "$.data" isCollection
 
+# El inbox unificado incluye menciones y actividad del proyecto.
+GET {{base_url}}/api/v1/collab/notifications/unread/count
+Authorization: Bearer {{worker_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.data.count" isString
+
 # --- Worker: Cuenta notificaciones no leidas ---
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread/count
+GET {{base_url}}/api/v1/collab/notifications/unread/count
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Captures]
@@ -89,30 +96,30 @@ jsonpath "$.data.count" isString
 
 # --- Worker: Marca notificacion como leida ---
 # Obtener primera notificacion
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread
+GET {{base_url}}/api/v1/collab/notifications/unread
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Captures]
 notification_id: jsonpath "$.data[0].id"
 
-PATCH {{base_url}}/api/v1/collab/notifications/chat-mentions/{{notification_id}}/read
+PATCH {{base_url}}/api/v1/collab/notifications/{{notification_id}}/read
 Authorization: Bearer {{worker_token}}
 HTTP 200
 
 # --- Verificar que la cuenta disminuyo ---
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread/count
+GET {{base_url}}/api/v1/collab/notifications/unread/count
 Authorization: Bearer {{worker_token}}
 HTTP 200
 [Asserts]
 jsonpath "$.data.count" isString
 
 # --- Notificacion inexistente (404) ---
-PATCH {{base_url}}/api/v1/collab/notifications/chat-mentions/00000000-0000-0000-0000-000000000000/read
+PATCH {{base_url}}/api/v1/collab/notifications/00000000-0000-0000-0000-000000000000/read
 Authorization: Bearer {{worker_token}}
 HTTP 404
 
 # --- Admin: Sin notificaciones pendientes ---
-GET {{base_url}}/api/v1/collab/notifications/chat-mentions/unread
+GET {{base_url}}/api/v1/collab/notifications/unread
 Authorization: Bearer {{admin_token}}
 HTTP 200
 [Asserts]

@@ -9,8 +9,8 @@ import { createBoardRepository } from "../board/board.repository";
 import { createBriefRepository } from "../brief/brief.repository";
 import { createAuditRepository } from "../repository/audit.repository";
 import { defaultColumnsByType, PROJECT_BOARD_TASK_LIMIT } from "../shared/constants";
-import { assertProjectAccess } from "../shared/project-access";
-import { enrichProjectMembersWithProfiles } from "../shared/mappers";
+import { assertProjectAccess, assertProjectMemberRoleCompatibility } from "../shared/project-access";
+import { buildMemberAssignmentMaps, enrichProjectMembersWithProfiles } from "../shared/mappers";
 import { canManageProject } from "../shared/guards";
 
 type Actor = {
@@ -96,6 +96,18 @@ export const createProjectService = (
           ? await getUserProfilesFromSnapshots(subsForProfiles)
           : await getUserProfilesFromSnapshots([]);
       const memberProfiles = memberProfilesResult.profiles;
+      if (memberProfilesResult.replicaUnavailable) {
+        throw new BadRequestError("No se pudo validar la identidad de los miembros; intenta de nuevo");
+      }
+      if (memberProfilesResult.missingSubs.length > 0) {
+        throw new BadRequestError("Uno o más miembros no existen o aún no están disponibles");
+      }
+      for (const workerSub of uniqueWorkerSubs) {
+        assertProjectMemberRoleCompatibility(memberProfiles.get(workerSub)!.role, "worker");
+      }
+      if (payload.clientSub) {
+        assertProjectMemberRoleCompatibility(memberProfiles.get(payload.clientSub)!.role, "client");
+      }
 
       const project = await db.transaction(async (tx) => {
         const txProjectRepo = createProjectRepository(tx);
@@ -152,18 +164,29 @@ export const createProjectService = (
           userAgent: meta.userAgent,
           details: { type: project.type, client: project.clientName },
         });
+        await collabEvents.emit("project.created", project.id, actor.sub, {
+          projectId: project.id,
+          projectName: project.name,
+          projectType: project.type,
+          clientName: project.clientName,
+          clientSub: project.clientSub ?? undefined,
+          adminResponsibleSub: project.adminResponsibleSub,
+          status: project.status,
+          description: project.description ?? null,
+          progressPercent: project.progressPercent,
+          isArchived: project.isArchived,
+          createdAt: project.createdAt.toISOString(),
+          updatedAt: project.updatedAt.toISOString(),
+        }, tx);
         return project;
       });
 
-      void collabEvents.emit("project.created", project.id, actor.sub, {
-        projectId: project.id,
-        projectName: project.name,
-        projectType: project.type,
-        clientName: project.clientName,
-        clientSub: project.clientSub ?? undefined,
-        adminResponsibleSub: project.adminResponsibleSub,
-      });
+      return project;
+    },
 
+    getProject: async (actor: Actor, projectId: string) => {
+      const { project } = await assertProjectAccess(accessRepo, actor, projectId);
+      await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       return project;
     },
 
@@ -183,35 +206,58 @@ export const createProjectService = (
       if (!canManageProject(actor.role, member?.role)) {
         throw new ForbiddenError("Solo administradores editan proyecto");
       }
-      const updated = await projectRepository.updateProjectById(projectId, {
-        name: patch.name,
-        description: patch.description ?? undefined,
-        status: patch.status,
-        estimatedDueDate: patch.estimatedDueDate ?? undefined,
-        progressPercent: patch.progressPercent,
+      return db.transaction(async (tx) => {
+        const txProjectRepo = createProjectRepository(tx);
+        const updated = await txProjectRepo.updateProjectById(projectId, {
+          name: patch.name,
+          description: patch.description ?? undefined,
+          status: patch.status,
+          estimatedDueDate: patch.estimatedDueDate ?? undefined,
+          progressPercent: patch.progressPercent,
+        });
+        if (!updated) throw new NotFoundError("Proyecto no encontrado");
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "project_updated",
+          resourceType: "project",
+          resourceId: projectId,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+        });
+        await collabEvents.emit("project.updated", projectId, actor.sub, {
+          projectId,
+          projectName: updated.name,
+          projectType: updated.type,
+          clientName: updated.clientName,
+          clientSub: updated.clientSub ?? undefined,
+          adminResponsibleSub: updated.adminResponsibleSub,
+          status: updated.status,
+          description: updated.description ?? null,
+          progressPercent: updated.progressPercent,
+          isArchived: updated.isArchived,
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString(),
+        }, tx);
+        return updated;
       });
-      if (!updated) throw new NotFoundError("Proyecto no encontrado");
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "project_updated",
-        resourceType: "project",
-        resourceId: projectId,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-      });
-      return updated;
     },
 
     getProjectWorkspace: async (actor: Actor, projectId: string) => {
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
       await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
+      const isClient = actor.role === "client";
       const [members, columns, tasks, brief, formalChanges, assignees] = await Promise.all([
         memberRepository.listProjectMembers(projectId),
-        boardRepository.listTaskColumnsByProject(projectId),
-        boardRepository.listTasksByProject({ projectId, limit: PROJECT_BOARD_TASK_LIMIT, offset: 0 }),
+        boardRepository.listTaskColumnsByProject(projectId, isClient ? true : undefined),
+        boardRepository.listTasksByProject({
+          projectId,
+          limit: PROJECT_BOARD_TASK_LIMIT,
+          offset: 0,
+          isClientVisible: isClient ? true : undefined,
+        }),
         briefRepository.getBriefByProject(projectId),
         changeRequestRepository.listChangeRequestsByProject(projectId, "formal"),
-        boardRepository.listTaskAssigneesByProject(projectId),
+        boardRepository.listTaskAssigneesByProject(projectId, isClient ? true : undefined),
       ]);
 
       const enrichedMembers = await enrichProjectMembersWithProfiles(
@@ -228,17 +274,14 @@ export const createProjectService = (
         tasks.rows
       );
 
-      const isClient = actor.role === "client";
-      const visibleColumns = isClient ? columns.filter((c: any) => c.isClientVisible) : columns;
-      const visibleTasks = isClient ? tasks.rows.filter((t: any) => t.isClientVisible) : tasks.rows;
       const tasksTruncated = tasks.total > PROJECT_BOARD_TASK_LIMIT;
 
       return {
         project,
         members: enrichedMembers,
         board: {
-          columns: visibleColumns,
-          tasks: visibleTasks,
+          columns,
+          tasks: tasks.rows,
           tasksTotal: tasks.total,
           tasksLimit: PROJECT_BOARD_TASK_LIMIT,
           tasksTruncated,
@@ -251,22 +294,20 @@ export const createProjectService = (
     getProjectBoard: async (actor: Actor, projectId: string) => {
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
       await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
+      const isClient = actor.role === "client";
       const [members, columns, tasks, assignees] = await Promise.all([
         memberRepository.listProjectMembers(projectId),
-        boardRepository.listTaskColumnsByProject(projectId),
-        boardRepository.listTasksByProject({ projectId, limit: PROJECT_BOARD_TASK_LIMIT, offset: 0 }),
-        boardRepository.listTaskAssigneesByProject(projectId),
+        boardRepository.listTaskColumnsByProject(projectId, isClient ? true : undefined),
+        boardRepository.listTasksByProject({
+          projectId,
+          limit: PROJECT_BOARD_TASK_LIMIT,
+          offset: 0,
+          isClientVisible: isClient ? true : undefined,
+        }),
+        boardRepository.listTaskAssigneesByProject(projectId, isClient ? true : undefined),
       ]);
 
-      const { assigneeEmailBySub, taskCountBySub } = { assigneeEmailBySub: new Map<string, string>(), taskCountBySub: new Map<string, number>() }; // simplified; original used buildMemberAssignmentMaps
-      for (const a of assignees) {
-        if (!assigneeEmailBySub.has(a.userSub)) assigneeEmailBySub.set(a.userSub, a.userEmail);
-        taskCountBySub.set(a.userSub, (taskCountBySub.get(a.userSub) ?? 0) + 1);
-      }
-      for (const t of tasks.rows) {
-        if (!t.assigneeSub) continue;
-        taskCountBySub.set(t.assigneeSub, (taskCountBySub.get(t.assigneeSub) ?? 0) + 1);
-      }
+      const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks.rows);
 
       const lightweightMembers = members.map((member) => ({
         ...member,
@@ -279,17 +320,14 @@ export const createProjectService = (
         profession: null,
       }));
 
-      const isClient = actor.role === "client";
-      const visibleColumns = isClient ? columns.filter((c: any) => c.isClientVisible) : columns;
-      const visibleTasks = isClient ? tasks.rows.filter((t: any) => t.isClientVisible) : tasks.rows;
       const tasksTruncated = tasks.total > PROJECT_BOARD_TASK_LIMIT;
 
       return {
         project,
         members: lightweightMembers,
         board: {
-          columns: visibleColumns,
-          tasks: visibleTasks,
+          columns,
+          tasks: tasks.rows,
           tasksTotal: tasks.total,
           tasksLimit: PROJECT_BOARD_TASK_LIMIT,
           tasksTruncated,

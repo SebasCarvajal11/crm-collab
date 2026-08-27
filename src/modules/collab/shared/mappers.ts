@@ -62,22 +62,31 @@ export const resolveAssigneeEmails = async (
 };
 
 export const buildMemberAssignmentMaps = (
-  assignees: Array<{ userSub: string; userEmail: string }>,
-  tasks: Array<{ assigneeSub: string | null }>
+  assignees: Array<{ taskId: string; userSub: string; userEmail: string }>,
+  tasks: Array<{ id: string; assigneeSub: string | null }>
 ) => {
   const assigneeEmailBySub = new Map<string, string>();
-  const taskCountBySub = new Map<string, number>();
+  const taskIdsByAssignee = new Map<string, Set<string>>();
+
+  const registerAssignment = (userSub: string, taskId: string) => {
+    const taskIds = taskIdsByAssignee.get(userSub) ?? new Set<string>();
+    taskIds.add(taskId);
+    taskIdsByAssignee.set(userSub, taskIds);
+  };
 
   for (const assignee of assignees) {
     if (!assigneeEmailBySub.has(assignee.userSub)) assigneeEmailBySub.set(assignee.userSub, assignee.userEmail);
-    taskCountBySub.set(assignee.userSub, (taskCountBySub.get(assignee.userSub) ?? 0) + 1);
+    registerAssignment(assignee.userSub, assignee.taskId);
   }
 
   for (const task of tasks) {
     if (!task.assigneeSub) continue;
-    taskCountBySub.set(task.assigneeSub, (taskCountBySub.get(task.assigneeSub) ?? 0) + 1);
+    registerAssignment(task.assigneeSub, task.id);
   }
 
+  const taskCountBySub = new Map(
+    [...taskIdsByAssignee].map(([userSub, taskIds]) => [userSub, taskIds.size])
+  );
   return { assigneeEmailBySub, taskCountBySub };
 };
 
@@ -91,8 +100,8 @@ export const enrichProjectMembersWithProfiles = async (
     lastSeenAt: Date | null;
   }>,
   actor: Actor,
-  assignees: Array<{ userSub: string; userEmail: string }>,
-  tasks: Array<{ assigneeSub: string | null }>
+  assignees: Array<{ taskId: string; userSub: string; userEmail: string }>,
+  tasks: Array<{ id: string; assigneeSub: string | null }>
 ) => {
   const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks);
   const userSubs = [...new Set(members.map((m) => m.userSub).filter(Boolean))];

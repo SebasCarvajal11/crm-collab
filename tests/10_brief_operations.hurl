@@ -69,7 +69,7 @@ PATCH {{base_url}}/api/v1/collab/projects/{{brief_project_id}}/brief
 Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 {
-  "content": "Brief actualizado por admin {{TEST_SUFFIX}}"
+  "body": "Brief actualizado por admin {{TEST_SUFFIX}}"
 }
 HTTP 200
 [Asserts]
@@ -80,7 +80,7 @@ PATCH {{base_url}}/api/v1/collab/projects/{{brief_project_id}}/brief
 Authorization: Bearer {{worker_token}}
 Content-Type: application/json
 {
-  "content": "Brief actualizado por worker {{TEST_SUFFIX}}"
+  "body": "Brief actualizado por worker {{TEST_SUFFIX}}"
 }
 HTTP 200
 [Asserts]
@@ -98,6 +98,6 @@ PATCH {{base_url}}/api/v1/collab/projects/{{brief_project_id}}/brief
 Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
-  "content": "No permitido"
+  "body": "No permitido"
 }
 HTTP 403

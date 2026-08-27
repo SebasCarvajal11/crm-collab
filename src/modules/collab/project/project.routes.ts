@@ -38,6 +38,11 @@ export const projectRoutes = new Hono<AppEnv>();
 projectRoutes.get("/projects", zValidator("query", ProjectFiltersQuerySchema), projectController.listProjects);
 projectRoutes.get("/projects/search", zValidator("query", ProjectSearchQuerySchema), projectController.searchProjects);
 projectRoutes.post("/projects", zValidator("json", CreateProjectSchema), projectController.createProject);
+projectRoutes.get(
+  "/projects/:projectId",
+  zValidator("param", ProjectIdParamSchema),
+  projectController.getProject
+);
 projectRoutes.patch(
   "/projects/:projectId",
   zValidator("param", ProjectIdParamSchema),

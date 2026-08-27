@@ -58,27 +58,6 @@ HTTP 201
 [Captures]
 file_project_id: jsonpath "$.data.id"
 
-# Obtener workspace para tener column_id y task
-GET {{base_url}}/api/v1/collab/projects/{{file_project_id}}/workspace
-Authorization: Bearer {{worker_token}}
-HTTP 200
-[Captures]
-file_column_id: jsonpath "$.data.board.columns[0].id"
-
-# Crear tarea para adjuntar archivos
-POST {{base_url}}/api/v1/collab/projects/{{file_project_id}}/tasks
-Authorization: Bearer {{worker_token}}
-Content-Type: application/json
-{
-  "column_id": "{{file_column_id}}",
-  "title": "Tarea con archivos {{TEST_SUFFIX}}",
-  "priority": "medium",
-  "position": 0
-}
-HTTP 201
-[Captures]
-file_task_id: jsonpath "$.data.id"
-
 # --- Worker: Solicita URL de subida ---
 POST {{base_url}}/api/v1/collab/projects/{{file_project_id}}/files/upload-url
 Authorization: Bearer {{worker_token}}
@@ -86,7 +65,7 @@ Content-Type: application/json
 {
   "fileName": "documento_prueba.pdf",
   "mimeType": "application/pdf",
-  "sizeBytes": 50000
+  "sizeBytes": 24
 }
 HTTP 200
 [Captures]
@@ -96,41 +75,37 @@ file_object_key: jsonpath "$.data.objectKey"
 jsonpath "$.data.uploadUrl" exists
 jsonpath "$.data.objectKey" exists
 
-# --- Worker: Solicita URL de subida para tarea ---
-POST {{base_url}}/api/v1/collab/projects/{{file_project_id}}/tasks/{{file_task_id}}/files/upload-url
-Authorization: Bearer {{worker_token}}
-Content-Type: application/json
-{
-  "fileName": "tarea_archivo.pdf",
-  "mimeType": "application/pdf",
-  "sizeBytes": 25000
-}
+# --- Worker: carga el binario directamente a almacenamiento privado ---
+PUT {{upload_url}}
+Content-Type: application/pdf
+file,fixtures/collab-e2e.pdf;
 HTTP 200
-[Captures]
-task_upload_url: jsonpath "$.data.uploadUrl"
-task_file_object_key: jsonpath "$.data.objectKey"
 
 # --- Worker: Registra metadatos de archivo ---
 POST {{base_url}}/api/v1/collab/projects/{{file_project_id}}/files
 Authorization: Bearer {{worker_token}}
 Content-Type: application/json
 {
-  "object_key": "{{file_object_key}}",
+  "storage_path": "{{file_object_key}}",
   "file_name": "documento_prueba.pdf",
+  "title": "Documento de prueba",
+  "description": "Archivo de prueba de extremo a extremo",
   "mime_type": "application/pdf",
-  "size_bytes": 50000,
-  "origin": "conversation"
+  "size_bytes": 24,
+  "folder": "shared_deliverables",
+  "is_client_visible": true,
+  "origin": "manual_upload"
 }
 HTTP 201
 [Captures]
 file_id: jsonpath "$.data.id"
 
-# --- Worker: Aprueba archivo ---
+# --- Client: Aprueba archivo visible ---
 PATCH {{base_url}}/api/v1/collab/files/{{file_id}}/approve
-Authorization: Bearer {{worker_token}}
+Authorization: Bearer {{client_token}}
 Content-Type: application/json
 {
-  "approved": true
+  "approve": true
 }
 HTTP 200
 

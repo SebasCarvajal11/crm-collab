@@ -73,7 +73,7 @@ Content-Type: application/json
 }
 HTTP 200
 [Asserts]
-jsonpath "$.data.user_sub" == "{{worker_subject}}"
+jsonpath "$.data.userSub" == "{{worker_subject}}"
 jsonpath "$.data.role" == "worker"
 
 # --- Admin: Agrega client al proyecto (upsert) ---
@@ -86,10 +86,11 @@ Content-Type: application/json
 }
 HTTP 200
 [Asserts]
-jsonpath "$.data.user_sub" == "{{client_subject}}"
+jsonpath "$.data.userSub" == "{{client_subject}}"
 jsonpath "$.data.role" == "client"
 
-# --- Admin: Actualiza rol de miembro ---
+# --- Admin: no puede elevar a worker a admin local ---
+# La membresía nunca puede otorgar privilegios que la identidad global no posee.
 PUT {{base_url}}/api/v1/collab/projects/{{member_project_id}}/members
 Authorization: Bearer {{admin_token}}
 Content-Type: application/json
@@ -97,11 +98,9 @@ Content-Type: application/json
   "user_sub": "{{worker_subject}}",
   "role": "admin"
 }
-HTTP 200
-[Asserts]
-jsonpath "$.data.role" == "admin"
+HTTP 400
 
-# Restaurar rol original
+# La membresía original se conserva tras el intento rechazado.
 PUT {{base_url}}/api/v1/collab/projects/{{member_project_id}}/members
 Authorization: Bearer {{admin_token}}
 Content-Type: application/json
