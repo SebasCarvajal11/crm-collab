@@ -26,6 +26,8 @@ export class RedisStreamsEventBus implements EventBus {
   private streamKey: string;
   private group: string;
   private consumerId: string;
+  private pendingIdleMs: number;
+  private batchSize: number;
 
   constructor(publisher: Redis, subscriber: Redis) {
     this.publisher = publisher;
@@ -33,6 +35,8 @@ export class RedisStreamsEventBus implements EventBus {
     this.streamKey = env.REDIS_STREAMS_KEY;
     this.group = env.REDIS_CONSUMER_GROUP;
     this.consumerId = `${env.HOSTNAME}-${process.pid}`;
+    this.pendingIdleMs = env.COLLAB_EVENTS_PENDING_IDLE_MS;
+    this.batchSize = env.COLLAB_EVENTS_BATCH_SIZE;
   }
 
   on(eventType: CollabEventType, handler: EventHandler): void {
@@ -147,10 +151,13 @@ export class RedisStreamsEventBus implements EventBus {
   private async readLoop(): Promise<void> {
     while (this.running) {
       try {
+        await this.recoverPendingMessages();
         const results = (await this.subscriber.xreadgroup(
           "GROUP",
           this.group,
           this.consumerId,
+          "COUNT",
+          this.batchSize,
           "BLOCK",
           5000,
           "STREAMS",
@@ -163,33 +170,7 @@ export class RedisStreamsEventBus implements EventBus {
         for (const [, messages] of results) {
           if (!messages || !messages.length) continue;
 
-          for (const [messageId, fields] of messages) {
-            // fields is a flat array: [key1, value1, key2, value2, ...]
-            const payloadIndex = (fields as string[]).indexOf("payload");
-            if (payloadIndex === -1 || payloadIndex + 1 >= fields.length) {
-              logger.warn({ messageId }, "[RedisStreamsEventBus] Malformed stream message");
-              continue;
-            }
-            const payloadJson = (fields as string[])[payloadIndex + 1];
-
-            // Skip internal shutdown sentinel
-            if (payloadJson === "1" && (fields as string[]).includes("__shutdown__")) {
-              await this.subscriber.xack(this.streamKey, this.group, messageId);
-              continue;
-            }
-
-            let event: CollabEvent<CollabEventPayload>;
-            try {
-              event = JSON.parse(payloadJson);
-            } catch {
-              logger.warn({ messageId }, "[RedisStreamsEventBus] Invalid JSON in stream message");
-              await this.subscriber.xack(this.streamKey, this.group, messageId);
-              continue;
-            }
-
-            await this.dispatchLocal(event);
-            await this.subscriber.xack(this.streamKey, this.group, messageId);
-          }
+          await this.processMessages(messages);
         }
       } catch (err) {
         if (!this.running) break;
@@ -200,7 +181,63 @@ export class RedisStreamsEventBus implements EventBus {
     }
   }
 
-  private async dispatchLocal(event: CollabEvent<CollabEventPayload>): Promise<void> {
+  /**
+   * Reclama mensajes abandonados por un consumidor que se detuvo antes del ACK.
+   * La persistencia de cada handler es idempotente, por lo que el contrato es
+   * "al menos una vez" y no se pierde una notificación ante una caída.
+   */
+  private async recoverPendingMessages(): Promise<void> {
+    let startId = "0-0";
+    do {
+      const claimed = await (this.subscriber as any).xautoclaim(
+        this.streamKey,
+        this.group,
+        this.consumerId,
+        this.pendingIdleMs,
+        startId,
+        "COUNT",
+        this.batchSize
+      ) as [string, Array<[string, string[]]>];
+      const [nextStartId, messages] = claimed;
+      if (!messages?.length) return;
+      await this.processMessages(messages);
+      if (nextStartId === startId) return;
+      startId = nextStartId;
+    } while (this.running);
+  }
+
+  private async processMessages(messages: Array<[string, string[]]>): Promise<void> {
+    for (const [messageId, fields] of messages) {
+      if (await this.processMessage(messageId, fields)) {
+        await this.subscriber.xack(this.streamKey, this.group, messageId);
+      }
+    }
+  }
+
+  /** Devuelve true únicamente cuando es seguro confirmar el mensaje. */
+  private async processMessage(messageId: string, fields: string[]): Promise<boolean> {
+    const payloadIndex = fields.indexOf("payload");
+    if (payloadIndex === -1 || payloadIndex + 1 >= fields.length) {
+      if (fields.includes("__shutdown__")) return true;
+      logger.warn({ messageId }, "[RedisStreamsEventBus] Malformed stream message");
+      return true;
+    }
+    const payloadJson = fields[payloadIndex + 1];
+    let event: CollabEvent<CollabEventPayload>;
+    try {
+      event = JSON.parse(payloadJson);
+    } catch {
+      logger.warn({ messageId }, "[RedisStreamsEventBus] Invalid JSON in stream message");
+      return true;
+    }
+    const delivered = await this.dispatchLocal(event);
+    if (!delivered) {
+      logger.error({ messageId, eventType: event.type }, "[RedisStreamsEventBus] Event left pending for retry after handler failure");
+    }
+    return delivered;
+  }
+
+  private async dispatchLocal(event: CollabEvent<CollabEventPayload>): Promise<boolean> {
     const specificHandlers = this.handlers.get(event.type) || [];
     const allHandlers = [...specificHandlers, ...this.globalHandlers];
 
@@ -208,7 +245,7 @@ export class RedisStreamsEventBus implements EventBus {
     const correlationId = event.correlationId;
     const version = event.version ?? 1;
 
-    await traceStorage.run({ traceId, correlationId }, async () => {
+    return traceStorage.run({ traceId, correlationId }, async () => {
       const results = await Promise.allSettled(
         allHandlers.map((handler) => Promise.resolve(handler(event)))
       );
@@ -235,6 +272,7 @@ export class RedisStreamsEventBus implements EventBus {
           logger.error({ err: r.reason, eventType: event.type }, `[RedisStreamsEventBus] Error in handler for ${event.type}`);
         }
       });
+      return failed.length === 0;
     });
   }
 }

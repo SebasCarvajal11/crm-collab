@@ -45,4 +45,22 @@ describe("RedisStreamsEventBus", () => {
 
     expect(handler).toHaveBeenCalledOnce();
   });
+
+  it("keeps a failed handler message pending so it can be reclaimed", async () => {
+    const bus = new RedisStreamsEventBus({} as any, {} as any);
+    bus.onAny(async () => { throw new Error("database unavailable"); });
+
+    const acknowledged = await (bus as any).processMessage("1-0", [
+      "payload",
+      JSON.stringify({ id: "event-1", version: 1, type: "project.updated", projectId: "project-1", actorSub: "admin-1", data: {} }),
+    ]);
+
+    expect(acknowledged).toBe(false);
+  });
+
+  it("acknowledges shutdown sentinels instead of leaving them in the pending list", async () => {
+    const bus = new RedisStreamsEventBus({} as any, {} as any);
+
+    await expect((bus as any).processMessage("1-0", ["__shutdown__", "1"])).resolves.toBe(true);
+  });
 });

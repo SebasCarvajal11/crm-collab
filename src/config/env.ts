@@ -50,6 +50,9 @@ const envSchema = z
     REDIS_URL: z.string().url().optional(),
     REDIS_STREAMS_KEY: z.string().default(STREAM_CONVENTIONS.streams.collab.events),
     REDIS_CONSUMER_GROUP: z.string().default(STREAM_CONVENTIONS.groups.collab.events),
+    /** Tiempo mínimo antes de reclamar un mensaje pendiente de otro consumidor. */
+    COLLAB_EVENTS_PENDING_IDLE_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(30_000),
+    COLLAB_EVENTS_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
     HOSTNAME: z.string().default("localhost"),
     MEDIA_COMMANDS_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.collab.mediaCommands),
     MEDIA_RESPONSES_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.media.assetResponses),
