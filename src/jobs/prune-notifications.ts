@@ -1,21 +1,40 @@
-import { and, eq, lte } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../db/connection";
-import { projectActivityNotifications, projectMentionNotifications } from "../db/schema";
+
+const PRUNE_BATCH_SIZE = 1_000;
+
+async function pruneTableInBatches(tableName: "project_activity_notifications" | "project_mention_notifications", cutoff: Date) {
+  let removed = 0;
+
+  while (true) {
+    const result = await db.execute(sql`
+      WITH candidates AS (
+        SELECT id
+        FROM schema_collab.${sql.identifier(tableName)}
+        WHERE is_seen = true
+          AND seen_at <= ${cutoff}
+        ORDER BY seen_at ASC
+        LIMIT ${PRUNE_BATCH_SIZE}
+        FOR UPDATE SKIP LOCKED
+      )
+      DELETE FROM schema_collab.${sql.identifier(tableName)} AS notification
+      USING candidates
+      WHERE notification.id = candidates.id
+    `);
+    const batchSize = result.rowCount ?? 0;
+    removed += batchSize;
+    if (batchSize < PRUNE_BATCH_SIZE) return removed;
+  }
+}
 
 export async function pruneReadNotifications(retentionDays: number, now = new Date()): Promise<number> {
   const cutoff = new Date(now);
   cutoff.setUTCDate(cutoff.getUTCDate() - retentionDays);
 
   const [activities, mentions] = await Promise.all([
-    db
-      .delete(projectActivityNotifications)
-      .where(and(eq(projectActivityNotifications.isSeen, true), lte(projectActivityNotifications.seenAt, cutoff)))
-      .returning({ id: projectActivityNotifications.id }),
-    db
-      .delete(projectMentionNotifications)
-      .where(and(eq(projectMentionNotifications.isSeen, true), lte(projectMentionNotifications.seenAt, cutoff)))
-      .returning({ id: projectMentionNotifications.id }),
+    pruneTableInBatches("project_activity_notifications", cutoff),
+    pruneTableInBatches("project_mention_notifications", cutoff),
   ]);
 
-  return activities.length + mentions.length;
+  return activities + mentions;
 }

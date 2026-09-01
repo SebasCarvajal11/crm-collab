@@ -6,6 +6,7 @@ import { pool } from "../db/connection";
 import { getRedisConnection, initRedis } from "../shared/redis";
 import { serviceMetrics } from "../app";
 import { pruneReadNotifications } from "../jobs/prune-notifications";
+import { pruneExpiredMediaAccessCache } from "../jobs/prune-media-access-cache";
 
 const logger = getLogger();
 
@@ -28,6 +29,7 @@ const healthcheck = startWorkerHealthcheck("collab-outbox-worker", {
   redis: getRedisConnection(),
 });
 let lastNotificationPruneAt = 0;
+let lastMediaAccessCachePruneAt = 0;
 
 const tick = async () => {
   try {
@@ -44,6 +46,11 @@ const tick = async () => {
       const removed = await pruneReadNotifications(env.NOTIFICATION_RETENTION_DAYS);
       lastNotificationPruneAt = Date.now();
       logger.info({ removed, retentionDays: env.NOTIFICATION_RETENTION_DAYS }, "notificaciones leídas depuradas");
+    }
+    if (Date.now() - lastMediaAccessCachePruneAt >= env.MEDIA_ACCESS_CACHE_PRUNE_INTERVAL_MS) {
+      const removed = await pruneExpiredMediaAccessCache();
+      lastMediaAccessCachePruneAt = Date.now();
+      logger.info({ removed }, "caché expirada de accesos a media depurada");
     }
   } catch (err) {
     logger.error({ err, topic: "worker:collab-outbox" }, "error en ciclo");

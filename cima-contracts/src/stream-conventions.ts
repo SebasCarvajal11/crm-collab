@@ -11,6 +11,7 @@ export const STREAM_CONVENTIONS = {
     },
     collab: {
       events: "stream:collab.events",
+      eventsDlq: "stream:collab.events-dlq",
       mediaCommands: "stream:collab.media-commands",
       identityDlq: "stream:collab.identity-dlq",
     },

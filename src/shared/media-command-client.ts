@@ -118,12 +118,11 @@ type PendingResponse = {
 };
 
 const pendingResponses = new Map<string, PendingResponse>();
-const responseConsumerId = `${env.HOSTNAME}-${process.pid}-${randomUUID()}`;
-const responseConsumerGroup = `${env.MEDIA_RESPONSES_CONSUMER_GROUP}:${responseConsumerId}`;
 let responseLoopStarted = false;
 let responseLoopRunning = false;
 let responseLoopPromise: Promise<void> | null = null;
 let responseRedis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>> | undefined;
+let responseLastId = "$";
 
 const CACHE_SAFETY_WINDOW_MS = 15_000;
 
@@ -137,21 +136,6 @@ export async function startMediaResponseConsumer(): Promise<void> {
     return;
   }
 
-  try {
-    await redis.xgroup(
-      "CREATE",
-      env.MEDIA_RESPONSES_STREAM_KEY,
-      responseConsumerGroup,
-      "$",
-      "MKSTREAM",
-    );
-  } catch (err: any) {
-    if (!err.message?.includes("already exists")) {
-      responseLoopStarted = false;
-      throw err;
-    }
-  }
-
   responseRedis = redis;
   responseLoopRunning = true;
   responseLoopPromise = readMediaResponses(redis);
@@ -159,29 +143,17 @@ export async function startMediaResponseConsumer(): Promise<void> {
 
 export async function stopMediaResponseConsumer(): Promise<void> {
   responseLoopRunning = false;
-  const redis = getRedisConnection();
-  if (redis) {
-    await redis
-      .xadd(env.MEDIA_RESPONSES_STREAM_KEY, "*", "__shutdown__", "1")
-      .catch(() => undefined);
-  }
-
-  await responseRedis?.quit().catch(() => undefined);
+  const loopPromise = responseLoopPromise;
+  responseRedis?.disconnect();
   responseRedis = undefined;
   responseLoopPromise = null;
   responseLoopStarted = false;
 
-  if (responseLoopPromise) {
+  if (loopPromise) {
     await Promise.race([
-      responseLoopPromise,
+      loopPromise,
       new Promise<void>((resolve) => setTimeout(resolve, 3000)),
     ]);
-  }
-
-  if (redis) {
-    await redis
-      .xgroup("DESTROY", env.MEDIA_RESPONSES_STREAM_KEY, responseConsumerGroup)
-      .catch(() => undefined);
   }
 
   for (const [correlationId, pending] of pendingResponses) {
@@ -377,32 +349,28 @@ function signMediaCommand(command: UnsignedMediaCommandRequest): MediaCommandReq
 async function readMediaResponses(redis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>>) {
   while (responseLoopRunning) {
     try {
-      const results = (await redis.xreadgroup(
-        "GROUP",
-        responseConsumerGroup,
-        responseConsumerId,
+      const results = (await redis.xread(
         "COUNT",
         25,
         "BLOCK",
         5000,
         "STREAMS",
         env.MEDIA_RESPONSES_STREAM_KEY,
-        ">",
+        responseLastId,
       )) as any[] | null;
 
       if (!results?.length) continue;
 
       for (const [, messages] of results) {
         for (const [messageId, fields] of messages ?? []) {
+          responseLastId = messageId;
           const fieldMap = streamFieldsToMap(fields as string[]);
           if (fieldMap.get("__shutdown__") === "1") {
-            await redis.xack(env.MEDIA_RESPONSES_STREAM_KEY, responseConsumerGroup, messageId);
             continue;
           }
 
           const payload = fieldMap.get("payload");
           if (!payload) {
-            await redis.xack(env.MEDIA_RESPONSES_STREAM_KEY, responseConsumerGroup, messageId);
             continue;
           }
 
@@ -438,8 +406,6 @@ async function readMediaResponses(redis: NonNullable<ReturnType<typeof createRed
               await action();
             }
           }
-
-          await redis.xack(env.MEDIA_RESPONSES_STREAM_KEY, responseConsumerGroup, messageId);
         }
       }
     } catch (err) {

@@ -10,7 +10,7 @@ import { createBriefRepository } from "../brief/brief.repository";
 import { createAuditRepository } from "../repository/audit.repository";
 import { defaultColumnsByType, PROJECT_BOARD_TASK_LIMIT } from "../shared/constants";
 import { assertProjectAccess, assertProjectMemberRoleCompatibility } from "../shared/project-access";
-import { buildMemberAssignmentMaps, enrichProjectMembersWithProfiles } from "../shared/mappers";
+import { buildMemberAssignmentMaps, buildTaskCountMap, enrichProjectMembersWithProfiles } from "../shared/mappers";
 import { canManageProject } from "../shared/guards";
 
 type Actor = {
@@ -246,7 +246,7 @@ export const createProjectService = (
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
       await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       const isClient = actor.role === "client";
-      const [members, columns, tasks, brief, formalChanges, assignees] = await Promise.all([
+      const [members, columns, tasks, brief, formalChanges, assignees, taskCounts] = await Promise.all([
         memberRepository.listProjectMembers(projectId),
         boardRepository.listTaskColumnsByProject(projectId, isClient ? true : undefined),
         boardRepository.listTasksByProject({
@@ -258,6 +258,7 @@ export const createProjectService = (
         briefRepository.getBriefByProject(projectId),
         changeRequestRepository.listChangeRequestsByProject(projectId, "formal"),
         boardRepository.listTaskAssigneesByProject(projectId, isClient ? true : undefined),
+        boardRepository.listTaskCountsByAssigneeByProject(projectId, isClient ? true : undefined),
       ]);
 
       const enrichedMembers = await enrichProjectMembersWithProfiles(
@@ -271,7 +272,8 @@ export const createProjectService = (
         members,
         actor,
         assignees,
-        tasks.rows
+        tasks.rows,
+        taskCounts
       );
 
       const tasksTruncated = tasks.total > PROJECT_BOARD_TASK_LIMIT;
@@ -295,7 +297,7 @@ export const createProjectService = (
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
       await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       const isClient = actor.role === "client";
-      const [members, columns, tasks, assignees] = await Promise.all([
+      const [members, columns, tasks, assignees, taskCounts] = await Promise.all([
         memberRepository.listProjectMembers(projectId),
         boardRepository.listTaskColumnsByProject(projectId, isClient ? true : undefined),
         boardRepository.listTasksByProject({
@@ -305,9 +307,11 @@ export const createProjectService = (
           isClientVisible: isClient ? true : undefined,
         }),
         boardRepository.listTaskAssigneesByProject(projectId, isClient ? true : undefined),
+        boardRepository.listTaskCountsByAssigneeByProject(projectId, isClient ? true : undefined),
       ]);
 
-      const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks.rows);
+      const { assigneeEmailBySub } = buildMemberAssignmentMaps(assignees, []);
+      const taskCountBySub = buildTaskCountMap(taskCounts);
 
       const lightweightMembers = members.map((member) => ({
         ...member,

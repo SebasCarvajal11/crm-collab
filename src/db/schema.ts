@@ -224,6 +224,7 @@ export const projectChatMessages = collabSchema.table(
   (t) => [
     index("idx_project_chat_messages_project_id").on(t.projectId),
     index("idx_project_chat_messages_project_channel_created").on(t.projectId, t.channel, t.createdAt),
+    index("idx_project_chat_messages_author_sub").on(t.authorSub),
   ]
 );
 
@@ -276,6 +277,8 @@ export const projectMentionNotifications = collabSchema.table(
     uniqueIndex("uq_mention_notification_message_recipient").on(t.messageId, t.recipientSub),
     index("idx_mention_notification_recipient_seen").on(t.recipientSub, t.isSeen),
     index("idx_mention_notification_created_at").on(t.createdAt),
+    index("idx_mention_notification_author_sub").on(t.authorSub),
+    index("idx_mention_notification_seen_at").on(t.isSeen, t.seenAt),
   ]
 );
 
@@ -308,6 +311,7 @@ export const projectActivityNotifications = collabSchema.table(
     uniqueIndex("uq_activity_notification_event_recipient").on(t.eventId, t.recipientSub),
     index("idx_activity_notification_recipient_seen_created").on(t.recipientSub, t.isSeen, t.createdAt),
     index("idx_activity_notification_project_created").on(t.projectId, t.createdAt),
+    index("idx_activity_notification_seen_at").on(t.isSeen, t.seenAt),
   ]
 );
 
@@ -345,6 +349,8 @@ export const projectFiles = collabSchema.table(
     index("idx_project_files_project_id").on(t.projectId),
     index("idx_project_files_project_client_created").on(t.projectId, t.isClientVisible, t.createdAt),
     index("idx_project_files_task_id").on(t.taskId),
+    index("idx_project_files_created_by_sub").on(t.createdBySub),
+    uniqueIndex("uq_project_files_project_name_version").on(t.projectId, t.fileName, t.version),
   ]
 );
 
@@ -363,6 +369,7 @@ export const projectTaskAssignees = collabSchema.table(
   (t) => [
     primaryKey({ columns: [t.taskId, t.userSub] }),
     index("idx_task_assignees_task_id").on(t.taskId),
+    index("idx_task_assignees_user_sub").on(t.userSub),
   ]
 );
 
@@ -380,7 +387,10 @@ export const projectTaskComments = collabSchema.table(
     content: text("content").notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
-  (t) => [index("idx_task_comments_task_id").on(t.taskId)]
+  (t) => [
+    index("idx_task_comments_task_id").on(t.taskId),
+    index("idx_task_comments_author_sub").on(t.authorSub),
+  ]
 );
 
 export const projectBriefs = collabSchema.table("project_briefs", {
@@ -508,6 +518,8 @@ export const collabOutbox = collabSchema.table(
     status: varchar("status", { length: 20 }).default("pending").notNull(),
     attempts: integer("attempts").default(0).notNull(),
     availableAt: timestamp("available_at", { mode: "date" }).defaultNow().notNull(),
+    claimToken: uuid("claim_token"),
+    claimedAt: timestamp("claimed_at", { mode: "date" }),
     publishedAt: timestamp("published_at", { mode: "date" }),
     lastError: varchar("last_error", { length: 1000 }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
@@ -515,6 +527,7 @@ export const collabOutbox = collabSchema.table(
   },
   (t) => [
     index("collab_outbox_status_available_idx").on(t.status, t.availableAt),
+    index("collab_outbox_status_claimed_idx").on(t.status, t.claimedAt),
     index("collab_outbox_project_idx").on(t.projectId),
   ]
 );

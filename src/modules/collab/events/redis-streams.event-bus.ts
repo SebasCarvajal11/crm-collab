@@ -16,6 +16,8 @@ interface StreamMessage {
   payload: CollabEvent<CollabEventPayload>;
 }
 
+type DispatchResult = { delivered: true } | { delivered: false; error: unknown };
+
 export class RedisStreamsEventBus implements EventBus {
   private handlers: Map<CollabEventType, EventHandler[]> = new Map();
   private globalHandlers: EventHandler[] = [];
@@ -230,14 +232,63 @@ export class RedisStreamsEventBus implements EventBus {
       logger.warn({ messageId }, "[RedisStreamsEventBus] Invalid JSON in stream message");
       return true;
     }
-    const delivered = await this.dispatchLocal(event);
-    if (!delivered) {
+    const delivery = await this.dispatchLocal(event);
+    if (!delivery.delivered) {
       logger.error({ messageId, eventType: event.type }, "[RedisStreamsEventBus] Event left pending for retry after handler failure");
+      const deliveryCount = await this.getDeliveryCount(messageId);
+      if (deliveryCount >= env.COLLAB_EVENTS_MAX_RETRIES) {
+        await this.sendToDlq(messageId, fields, payloadJson, deliveryCount, delivery.error);
+        return true;
+      }
     }
-    return delivered;
+    return delivery.delivered;
   }
 
-  private async dispatchLocal(event: CollabEvent<CollabEventPayload>): Promise<boolean> {
+  private async getDeliveryCount(messageId: string): Promise<number> {
+    try {
+      const pending = await (this.subscriber as any).xpending(
+        this.streamKey,
+        this.group,
+        messageId,
+        messageId,
+        1,
+      ) as [string, string, number, number][] | null;
+      return pending?.[0]?.[3] ?? 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  private async sendToDlq(
+    messageId: string,
+    fields: string[],
+    payload: string,
+    deliveryCount: number,
+    error: unknown,
+  ): Promise<void> {
+    const normalized = error instanceof Error ? error : new Error(String(error));
+    const fieldsRecord = Object.fromEntries(
+      Array.from({ length: Math.floor(fields.length / 2) }, (_, index) => [fields[index * 2], fields[index * 2 + 1]]),
+    );
+    const dlqId = await this.publisher.xadd(
+      env.COLLAB_EVENTS_DLQ_STREAM_KEY,
+      "*",
+      "sourceStream", this.streamKey,
+      "sourceGroup", this.group,
+      "sourceMessageId", messageId,
+      "consumerId", this.consumerId,
+      "failedAt", new Date().toISOString(),
+      "deliveryCount", String(deliveryCount),
+      "errorName", normalized.name,
+      "errorMessage", normalized.message,
+      "payload", payload,
+      "rawFields", JSON.stringify(fieldsRecord),
+    );
+    if (!dlqId) throw new Error("Redis no devolvió id al enviar evento de colaboración a DLQ");
+    logger.error({ messageId, dlqId, deliveryCount }, "[RedisStreamsEventBus] Event moved to DLQ");
+  }
+
+  private async dispatchLocal(event: CollabEvent<CollabEventPayload>): Promise<DispatchResult> {
     const specificHandlers = this.handlers.get(event.type) || [];
     const allHandlers = [...specificHandlers, ...this.globalHandlers];
 
@@ -272,7 +323,8 @@ export class RedisStreamsEventBus implements EventBus {
           logger.error({ err: r.reason, eventType: event.type }, `[RedisStreamsEventBus] Error in handler for ${event.type}`);
         }
       });
-      return failed.length === 0;
+      if (failed.length === 0) return { delivered: true };
+      return { delivered: false, error: failed[0]?.reason };
     });
   }
 }

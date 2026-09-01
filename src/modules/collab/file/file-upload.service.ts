@@ -78,6 +78,7 @@ export const createFileUploadService = (
       assertAllowedUploadMime(physicalMeta.mimeType, fileName);
       return db.transaction(async (tx) => {
         const txFileRepository = createFileRepository(tx);
+        await txFileRepository.lockFileVersionSequence(projectId, fileName);
         const latest = await txFileRepository.findLatestVersion(projectId, fileName);
         const row = await txFileRepository.createFile({
           projectId,

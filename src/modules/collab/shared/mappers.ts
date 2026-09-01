@@ -90,6 +90,10 @@ export const buildMemberAssignmentMaps = (
   return { assigneeEmailBySub, taskCountBySub };
 };
 
+export const buildTaskCountMap = (
+  taskCounts: Array<{ userSub: string; taskCount: number }>
+) => new Map(taskCounts.map(({ userSub, taskCount }) => [userSub, Number(taskCount)]));
+
 export const enrichProjectMembersWithProfiles = async (
   repo: MemberRepo,
   members: Array<{
@@ -101,9 +105,11 @@ export const enrichProjectMembersWithProfiles = async (
   }>,
   actor: Actor,
   assignees: Array<{ taskId: string; userSub: string; userEmail: string }>,
-  tasks: Array<{ id: string; assigneeSub: string | null }>
+  tasks: Array<{ id: string; assigneeSub: string | null }>,
+  taskCounts?: Array<{ userSub: string; taskCount: number }>
 ) => {
-  const { assigneeEmailBySub, taskCountBySub } = buildMemberAssignmentMaps(assignees, tasks);
+  const { assigneeEmailBySub, taskCountBySub: taskCountsFromLoadedTasks } = buildMemberAssignmentMaps(assignees, tasks);
+  const taskCountBySub = taskCounts ? buildTaskCountMap(taskCounts) : taskCountsFromLoadedTasks;
   const userSubs = [...new Set(members.map((m) => m.userSub).filter(Boolean))];
   const { profiles: profileMap, missingSubs, replicaUnavailable } =
     await getUserProfilesFromSnapshots(userSubs);

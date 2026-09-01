@@ -58,6 +58,34 @@ describe("RedisStreamsEventBus", () => {
     expect(acknowledged).toBe(false);
   });
 
+  it("moves a repeatedly failing message to the DLQ and acknowledges it", async () => {
+    const publisher = { xadd: vi.fn().mockResolvedValue("1-0") };
+    const subscriber = { xpending: vi.fn().mockResolvedValue([["1-0", "consumer", 0, 3]]) };
+    const bus = new RedisStreamsEventBus(publisher as any, subscriber as any);
+    bus.onAny(async () => { throw new Error("invalid event data"); });
+
+    const acknowledged = await (bus as any).processMessage("1-0", [
+      "payload",
+      JSON.stringify({ id: "event-1", version: 1, type: "project.updated", projectId: "project-1", actorSub: "admin-1", data: {} }),
+    ]);
+
+    expect(acknowledged).toBe(true);
+    expect(publisher.xadd).toHaveBeenCalledWith(
+      expect.any(String),
+      "*",
+      "sourceStream", expect.any(String),
+      "sourceGroup", expect.any(String),
+      "sourceMessageId", "1-0",
+      "consumerId", expect.any(String),
+      "failedAt", expect.any(String),
+      "deliveryCount", "3",
+      "errorName", "Error",
+      "errorMessage", "invalid event data",
+      "payload", expect.any(String),
+      "rawFields", expect.any(String),
+    );
+  });
+
   it("acknowledges shutdown sentinels instead of leaving them in the pending list", async () => {
     const bus = new RedisStreamsEventBus({} as any, {} as any);
 

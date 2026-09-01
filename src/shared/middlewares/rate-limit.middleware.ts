@@ -1,4 +1,5 @@
 import { createMiddleware } from "hono/factory";
+import { matchedRoutes, routePath } from "hono/route";
 import type { AppEnv } from "./auth.middleware";
 import { AppError } from "./error-handler.middleware";
 import { getRedisConnection } from "../redis";
@@ -102,6 +103,14 @@ function resolveWriteLimit(path: string, method: string): { maxAttempts: number;
   return { maxAttempts: env.RATE_LIMIT_COLLAB_DEFAULT_MAX, windowMs: env.RATE_LIMIT_COLLAB_DEFAULT_WINDOW_MS };
 }
 
+export function matchedWriteRoute(c: Parameters<ReturnType<typeof createMiddleware<AppEnv>>>[0]): string {
+  return [...matchedRoutes(c)]
+    .reverse()
+    .find((matched) => matched.method === c.req.method)?.path
+    || routePath(c, -1)
+    || c.req.path;
+}
+
 /** Rate limit en mutaciones (POST/PUT/PATCH/DELETE) por usuario y ruta. */
 export function collabWriteRateLimit() {
   return createMiddleware<AppEnv>(async (c, next) => {
@@ -116,9 +125,9 @@ export function collabWriteRateLimit() {
       c.req.header("x-user-sub")?.trim() ||
       c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
       "unknown";
-    const path = c.req.path;
-    const opts = resolveWriteLimit(path, method);
-    const bucketKey = `${method}:${path}:${userKey}`;
+    const route = matchedWriteRoute(c);
+    const opts = resolveWriteLimit(route, method);
+    const bucketKey = `${method}:${route}:${userKey}`;
     const now = Date.now();
 
     const usedRedis = await checkRedisLimit(bucketKey, opts);

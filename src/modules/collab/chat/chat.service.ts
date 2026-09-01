@@ -41,7 +41,6 @@ export const createChatService = (
       query: { page: number; limit: number }
     ) => {
       const { member } = await assertProjectAccess(accessRepo, actor, projectId);
-      await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
         throw new ForbiddenError("No tienes acceso al chat interno");
       }
@@ -131,6 +130,7 @@ export const createChatService = (
       const row = await db.transaction(async (tx) => {
       const txChatRepository = createChatRepository(tx);
       const txNotificationRepository = createNotificationRepository(tx);
+      await createMemberRepository(tx).touchProjectMemberActivity(projectId, actor.sub);
       const row = await txChatRepository.createChatMessage({
         projectId,
         channel,

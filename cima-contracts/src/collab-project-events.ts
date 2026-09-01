@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const COLLAB_EVENT_CONTRACT_VERSION = 1 as const;
+/** v2 añade una instantánea suficiente para construir proyecciones externas. */
+export const COLLAB_EVENT_CONTRACT_VERSION = 2 as const;
 
 export const collabEventTypeSchema = z.enum([
   "project.created",
@@ -32,6 +33,25 @@ export const projectCreatedEventSchema = z.object({
   clientName: z.string().min(1),
   clientSub: z.string().uuid().optional(),
   adminResponsibleSub: z.string().uuid(),
+});
+
+/**
+ * Contrato de integración para consumidores que no poseen el agregado
+ * Project. Evita consultas cruzadas a la base de datos de Collab.
+ */
+export const projectProjectionEventSchema = z.object({
+  projectId: z.string().uuid(),
+  projectName: z.string().min(1),
+  projectType: z.enum(["campaign_service", "product_order"]),
+  clientName: z.string().min(1),
+  clientSub: z.string().uuid().optional(),
+  adminResponsibleSub: z.string().uuid(),
+  status: z.enum(["todo", "in_progress", "in_review", "completed"]),
+  description: z.string().nullable(),
+  progressPercent: z.number().int().min(0).max(100),
+  isArchived: z.boolean(),
+  createdAt: z.string().datetime({ offset: true }),
+  updatedAt: z.string().datetime({ offset: true }),
 });
 
 export const taskMovedEventSchema = z.object({
@@ -97,7 +117,7 @@ export const fileApprovedEventSchema = z.object({
 
 export const collabEventSchema = z.object({
   version: z.literal(1).default(1),
-  contractVersion: z.literal(COLLAB_EVENT_CONTRACT_VERSION).default(COLLAB_EVENT_CONTRACT_VERSION),
+  contractVersion: z.union([z.literal(1), z.literal(COLLAB_EVENT_CONTRACT_VERSION)]).default(COLLAB_EVENT_CONTRACT_VERSION),
   type: collabEventTypeSchema,
   projectId: z.string().uuid(),
   actorSub: z.string().uuid(),
@@ -106,6 +126,7 @@ export const collabEventSchema = z.object({
   correlationId: z.string().uuid().optional(),
   data: z.union([
     projectCreatedEventSchema,
+    projectProjectionEventSchema,
     taskMovedEventSchema,
     taskAssignedEventSchema,
     chatMentionEventSchema,
@@ -121,6 +142,7 @@ export const collabEventSchema = z.object({
 export type CollabEventType = z.infer<typeof collabEventTypeSchema>;
 export type CollabEvent = z.infer<typeof collabEventSchema>;
 export type ProjectCreatedEvent = z.infer<typeof projectCreatedEventSchema>;
+export type ProjectProjectionEvent = z.infer<typeof projectProjectionEventSchema>;
 export type TaskMovedEvent = z.infer<typeof taskMovedEventSchema>;
 export type TaskAssignedEvent = z.infer<typeof taskAssignedEventSchema>;
 export type ChatMentionEvent = z.infer<typeof chatMentionEventSchema>;

@@ -304,6 +304,33 @@ export const createBoardRepository = (conn: DbOrTx) => ({
         isClientVisible === undefined ? undefined : eq(projectTasks.isClientVisible, isClientVisible)
       )),
 
+  listTaskCountsByAssigneeByProject: async (projectId: string, isClientVisible?: boolean) => {
+    const visibilityFilter = isClientVisible === undefined
+      ? sql``
+      : sql`AND is_client_visible = ${isClientVisible}`;
+    const result = await conn.execute(sql<{ userSub: string; taskCount: number }>`
+      WITH assignments AS (
+        SELECT id AS task_id, assignee_sub AS user_sub
+        FROM schema_collab.project_tasks
+        WHERE project_id = ${projectId}::uuid
+          AND assignee_sub IS NOT NULL
+          ${visibilityFilter}
+
+        UNION
+
+        SELECT task_assignees.task_id, task_assignees.user_sub
+        FROM schema_collab.project_task_assignees AS task_assignees
+        INNER JOIN schema_collab.project_tasks AS tasks ON tasks.id = task_assignees.task_id
+        WHERE tasks.project_id = ${projectId}::uuid
+          ${isClientVisible === undefined ? sql`` : sql`AND tasks.is_client_visible = ${isClientVisible}`}
+      )
+      SELECT user_sub AS "userSub", COUNT(*)::int AS "taskCount"
+      FROM assignments
+      GROUP BY user_sub
+    `);
+    return (result.rows ?? []) as Array<{ userSub: string; taskCount: number }>;
+  },
+
   createTaskComment: async (payload: NewProjectTaskComment) => {
     const [row] = await conn.insert(projectTaskComments).values(payload).returning();
     return row;

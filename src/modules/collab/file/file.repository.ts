@@ -1,9 +1,15 @@
 import type { DbOrTx } from "../shared/db.types";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { projectFiles } from "../../../db/schema";
 import type { NewProjectFile } from "../collab.types";
 
 export const createFileRepository = (conn: DbOrTx) => ({
+  lockFileVersionSequence: async (projectId: string, fileName: string) => {
+    await conn.execute(sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${projectId} || ':' || ${fileName}, 0))
+    `);
+  },
+
   createFile: async (payload: NewProjectFile) => {
     const [row] = await conn.insert(projectFiles).values(payload).returning();
     return row;

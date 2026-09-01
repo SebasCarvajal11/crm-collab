@@ -63,7 +63,7 @@ export async function appendAuthEventToDlq(
     fields.push("payload", record.payload);
   }
 
-  const dlqId = await redis.xadd(env.COLLAB_EVENTS_DLQ_STREAM_KEY, "*", ...fields);
+  const dlqId = await redis.xadd(env.AUTH_EVENTS_DLQ_STREAM_KEY, "*", ...fields);
   if (!dlqId) {
     throw new Error("Redis no devolvio id al escribir la entrada DLQ");
   }
@@ -76,7 +76,7 @@ export async function listAuthEventDlqEntries(
   limit = 25,
 ): Promise<AuthEventDlqEntry[]> {
   const messages = await redis.xrevrange(
-    env.COLLAB_EVENTS_DLQ_STREAM_KEY,
+    env.AUTH_EVENTS_DLQ_STREAM_KEY,
     "+",
     "-",
     "COUNT",
@@ -91,7 +91,7 @@ export async function replayAuthEventDlqEntry(
   id: string,
   options: { removeAfterReplay?: boolean } = {},
 ): Promise<{ replayedMessageId: string; removed: boolean }> {
-  const messages = await redis.xrange(env.COLLAB_EVENTS_DLQ_STREAM_KEY, id, id);
+  const messages = await redis.xrange(env.AUTH_EVENTS_DLQ_STREAM_KEY, id, id);
   if (!messages.length) {
     throw new Error(`No existe entrada DLQ con id ${id}`);
   }
@@ -113,7 +113,7 @@ export async function replayAuthEventDlqEntry(
 
   let removed = false;
   if (options.removeAfterReplay !== false) {
-    removed = (await redis.xdel(env.COLLAB_EVENTS_DLQ_STREAM_KEY, id)) > 0;
+    removed = (await redis.xdel(env.AUTH_EVENTS_DLQ_STREAM_KEY, id)) > 0;
   }
 
   return { replayedMessageId, removed };

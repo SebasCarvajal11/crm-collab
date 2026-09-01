@@ -98,15 +98,17 @@ export const createFileManagementService = (
         throw new ForbiddenError("Solo el creador, un administrador del proyecto o un admin global puede eliminar el archivo");
       }
       await deleteDocumentInMedia(actor, file.storagePath);
-      await fileRepository.deleteFileById(fileId);
-      await createAuditRepository(db).createAuditLog({
-        actorSub: actor.sub,
-        action: "task_file_deleted",
-        resourceType: "project_file",
-        resourceId: fileId,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        details: { fileName: file.fileName, storagePath: file.storagePath },
+      await db.transaction(async (tx) => {
+        await createFileRepository(tx).deleteFileById(fileId);
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "task_file_deleted",
+          resourceType: "project_file",
+          resourceId: fileId,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          details: { fileName: file.fileName, storagePath: file.storagePath },
+        });
       });
       return { deleted: true };
     },
