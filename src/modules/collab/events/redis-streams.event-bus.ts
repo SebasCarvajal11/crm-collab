@@ -11,11 +11,6 @@ import { v7 as uuidv7 } from "uuid";
 
 const logger = getLogger();
 
-interface StreamMessage {
-  id: string;
-  payload: CollabEvent<CollabEventPayload>;
-}
-
 type DispatchResult = { delivered: true } | { delivered: false; error: unknown };
 
 export class RedisStreamsEventBus implements EventBus {
@@ -318,7 +313,7 @@ export class RedisStreamsEventBus implements EventBus {
         `Métrica de evento procesado: ${event.type} v${version} (success: ${failed.length === 0})`
       );
 
-      results.forEach((r, idx) => {
+      results.forEach((r) => {
         if (r.status === "rejected") {
           logger.error({ err: r.reason, eventType: event.type }, `[RedisStreamsEventBus] Error in handler for ${event.type}`);
         }

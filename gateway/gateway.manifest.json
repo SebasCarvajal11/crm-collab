@@ -317,6 +317,30 @@
       "method": "PATCH",
       "backend_url": "/api/v1/collab/projects/{projectId}/brief",
       "openapi_ref": "PATCH /api/v1/collab/projects/{projectId}/brief"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract",
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/contract"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract",
+      "method": "PUT",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract",
+      "openapi_ref": "PUT /api/v1/collab/projects/{projectId}/contract"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/request-signature",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/request-signature",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/request-signature"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/sign",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/sign",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/sign"
     }
   ]
 }

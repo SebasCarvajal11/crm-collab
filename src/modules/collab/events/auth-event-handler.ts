@@ -7,7 +7,6 @@ import { userIdentitySnapshots } from "../../../db/schema";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import {
-  deleteUserIdentitySnapshot,
   upsertUserIdentitySnapshot,
   anonymizeUserPII,
 } from "../../../shared/identity-snapshot-store";

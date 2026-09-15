@@ -92,6 +92,10 @@ export const fileFolderEnum = collabSchema.enum("file_folder", [
   "shared_deliverables",
 ]);
 
+export const contractStatusEnum = collabSchema.enum("contract_status", ["draft", "pending_signature", "signed"]);
+export const contractProviderKindEnum = collabSchema.enum("contract_provider_kind", ["cima", "independent"]);
+export const contractClientKindEnum = collabSchema.enum("contract_client_kind", ["natural", "juridical"]);
+
 export const projects = collabSchema.table(
   "projects",
   {
@@ -107,6 +111,8 @@ export const projects = collabSchema.table(
     estimatedDueDate: timestamp("estimated_due_date", { mode: "date" }),
     unreadNotifications: integer("unread_notifications").default(0).notNull(),
     latestApprovedFileId: uuid("latest_approved_file_id"),
+    /** Enlace a Drive, OneDrive u otro repositorio externo de archivos pesados. */
+    fileRepositoryUrl: text("file_repository_url"),
     isArchived: boolean("is_archived").default(false).notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
@@ -447,6 +453,60 @@ export const projectBriefChangeLog = collabSchema.table(
   (t) => [index("idx_project_brief_change_log_project_id").on(t.projectId)]
 );
 
+/**
+ * Un contrato por proyecto. La configuración editable vive en el borrador;
+ * al solicitar firma se guarda un snapshot inmutable que se firma y audita.
+ */
+export const projectContracts = collabSchema.table(
+  "project_contracts",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    status: contractStatusEnum("status").default("draft").notNull(),
+    providerKind: contractProviderKindEnum("provider_kind").default("cima").notNull(),
+    providerName: varchar("provider_name", { length: 200 }).notNull(),
+    providerTaxId: varchar("provider_tax_id", { length: 80 }),
+    providerRepresentative: varchar("provider_representative", { length: 200 }),
+    providerRepresentativeDocument: varchar("provider_representative_document", { length: 80 }),
+    clientKind: contractClientKindEnum("client_kind").notNull(),
+    clientName: varchar("client_name", { length: 200 }).notNull(),
+    clientDocument: varchar("client_document", { length: 80 }),
+    clientCompanyName: varchar("client_company_name", { length: 200 }),
+    clientTaxId: varchar("client_tax_id", { length: 80 }),
+    clientRepresentative: varchar("client_representative", { length: 200 }),
+    clientRepresentativeDocument: varchar("client_representative_document", { length: 80 }),
+    clientEmail: varchar("client_email", { length: 255 }).notNull(),
+    clientPhone: varchar("client_phone", { length: 50 }),
+    planName: varchar("plan_name", { length: 160 }).notNull(),
+    monthlyFee: integer("monthly_fee").notNull(),
+    currency: varchar("currency", { length: 3 }).default("COP").notNull(),
+    taxIncluded: boolean("tax_included").default(true).notNull(),
+    termMonths: integer("term_months").notNull(),
+    serviceScope: text("service_scope").notNull(),
+    additionalTerms: text("additional_terms"),
+    contentSnapshot: text("content_snapshot"),
+    contentHash: varchar("content_hash", { length: 64 }),
+    preparedBySub: uuid("prepared_by_sub").notNull(),
+    requestedSignatureAt: timestamp("requested_signature_at", { mode: "date" }),
+    signedAt: timestamp("signed_at", { mode: "date" }),
+    signedBySub: uuid("signed_by_sub"),
+    signerName: varchar("signer_name", { length: 200 }),
+    signatureDataUrl: text("signature_data_url"),
+    consentAcceptedAt: timestamp("consent_accepted_at", { mode: "date" }),
+    signedIpAddress: varchar("signed_ip_address", { length: 45 }),
+    signedUserAgent: varchar("signed_user_agent", { length: 500 }),
+    signatureCity: varchar("signature_city", { length: 120 }).default("Bogotá, D.C.").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_project_contracts_project_id").on(t.projectId),
+    index("idx_project_contracts_status").on(t.status),
+  ]
+);
+
 export const auditLogs = collabSchema.table(
   "audit_logs",
   {
@@ -540,6 +600,7 @@ export const projectsRelations = relations(projects, ({ many }) => ({
   files: many(projectFiles),
   changeRequests: many(projectChangeRequests),
   briefChanges: many(projectBriefChangeLog),
+  contracts: many(projectContracts),
 }));
 
 export const projectColumnsRelations = relations(projectTaskColumns, ({ one, many }) => ({

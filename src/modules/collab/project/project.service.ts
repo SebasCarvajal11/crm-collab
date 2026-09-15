@@ -8,7 +8,7 @@ import { createMemberRepository } from "../member/member.repository";
 import { createBoardRepository } from "../board/board.repository";
 import { createBriefRepository } from "../brief/brief.repository";
 import { createAuditRepository } from "../repository/audit.repository";
-import { defaultColumnsByType, PROJECT_BOARD_TASK_LIMIT } from "../shared/constants";
+import { PROJECT_BOARD_TASK_LIMIT } from "../shared/constants";
 import { assertProjectAccess, assertProjectMemberRoleCompatibility } from "../shared/project-access";
 import { buildMemberAssignmentMaps, buildTaskCountMap, enrichProjectMembersWithProfiles } from "../shared/mappers";
 import { canManageProject } from "../shared/guards";
@@ -51,6 +51,7 @@ export const createProjectService = (
     ) => {
       const { rows, total } = await projectRepository.listProjectsForUser({
         userSub: actor.sub,
+        includeAll: actor.role === "admin",
         type: query.type,
         status: query.status,
         adminResponsibleSub: query.adminSub,
@@ -82,6 +83,7 @@ export const createProjectService = (
         type: ProjectType;
         estimatedDueDate?: Date;
         brief: string;
+        fileRepositoryUrl?: string;
       },
       meta: RequestMeta
     ) => {
@@ -126,6 +128,7 @@ export const createProjectService = (
           estimatedDueDate: payload.estimatedDueDate ?? null,
           status: "todo",
           progressPercent: 0,
+          fileRepositoryUrl: payload.fileRepositoryUrl ?? null,
         });
         await txMemberRepo.createProjectMember({
           projectId: project.id,
@@ -174,6 +177,7 @@ export const createProjectService = (
           status: project.status,
           description: project.description ?? null,
           progressPercent: project.progressPercent,
+          fileRepositoryUrl: project.fileRepositoryUrl,
           isArchived: project.isArchived,
           createdAt: project.createdAt.toISOString(),
           updatedAt: project.updatedAt.toISOString(),
@@ -199,10 +203,11 @@ export const createProjectService = (
         status?: "todo" | "in_progress" | "in_review" | "completed";
         estimatedDueDate?: Date | null;
         progressPercent?: number;
+        fileRepositoryUrl?: string | null;
       },
       meta: RequestMeta
     ) => {
-      const { project, member } = await assertProjectAccess(accessRepo, actor, projectId);
+      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
       if (!canManageProject(actor.role, member?.role)) {
         throw new ForbiddenError("Solo administradores editan proyecto");
       }
@@ -214,6 +219,7 @@ export const createProjectService = (
           status: patch.status,
           estimatedDueDate: patch.estimatedDueDate ?? undefined,
           progressPercent: patch.progressPercent,
+          fileRepositoryUrl: patch.fileRepositoryUrl,
         });
         if (!updated) throw new NotFoundError("Proyecto no encontrado");
         await createAuditRepository(tx).createAuditLog({
@@ -234,6 +240,7 @@ export const createProjectService = (
           status: updated.status,
           description: updated.description ?? null,
           progressPercent: updated.progressPercent,
+          fileRepositoryUrl: updated.fileRepositoryUrl,
           isArchived: updated.isArchived,
           createdAt: updated.createdAt.toISOString(),
           updatedAt: updated.updatedAt.toISOString(),

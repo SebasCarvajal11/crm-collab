@@ -50,6 +50,7 @@ export const createProjectController = (service: ReturnType<typeof createProject
         type: body.type,
         estimatedDueDate: body.estimated_due_date,
         brief: body.brief,
+        fileRepositoryUrl: body.file_repository_url,
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
@@ -72,6 +73,7 @@ export const createProjectController = (service: ReturnType<typeof createProject
         status: body.status,
         estimatedDueDate: body.estimated_due_date,
         progressPercent: body.progress_percent,
+        fileRepositoryUrl: body.file_repository_url,
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );

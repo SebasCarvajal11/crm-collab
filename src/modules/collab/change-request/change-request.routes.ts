@@ -7,7 +7,6 @@ import { createProjectRepository } from "../project/project.repository";
 import { createMemberRepository } from "../member/member.repository";
 import { createChatRepository } from "../chat/chat.repository";
 import { createBriefRepository } from "../brief/brief.repository";
-import { createBoardRepository } from "../board/board.repository";
 import { createChangeRequestService } from "./change-request.service";
 import { createChangeRequestController } from "./change-request.controller";
 import {
@@ -24,15 +23,13 @@ const projectRepository = createProjectRepository(db);
 const memberRepository = createMemberRepository(db);
 const chatRepository = createChatRepository(db);
 const briefRepository = createBriefRepository(db);
-const boardRepository = createBoardRepository(db);
 
 const changeRequestService = createChangeRequestService(
   changeRequestRepository,
   projectRepository,
   memberRepository,
   chatRepository,
-  briefRepository,
-  boardRepository
+  briefRepository
 );
 const changeRequestController = createChangeRequestController(changeRequestService);
 

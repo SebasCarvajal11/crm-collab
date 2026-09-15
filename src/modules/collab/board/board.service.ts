@@ -125,7 +125,7 @@ export const createBoardService = (
       },
       meta: RequestMeta
     ) => {
-      const { project, member } = await assertProjectAccess(accessRepo, actor, projectId);
+      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
       if (!canMoveTasks(actor.role, member?.role)) throw new ForbiddenError("No puedes crear tareas");
       const column = await boardRepository.findTaskColumnById(payload.columnId);
       if (!column || column.projectId !== projectId) throw new BadRequestError("La columna no pertenece al proyecto");
@@ -235,7 +235,7 @@ export const createBoardService = (
     ) => {
       const task = await boardRepository.findTaskById(taskId);
       if (!task) throw new NotFoundError("Tarea no encontrada");
-      const { project, member } = await assertProjectAccess(accessRepo, actor, task.projectId);
+      const { member } = await assertProjectAccess(accessRepo, actor, task.projectId);
       if (!canMoveTasks(actor.role, member?.role)) throw new ForbiddenError("No puedes editar/mover tareas");
       if (patch.assignees !== undefined || patch.subtasks !== undefined) {
         await assertWorkerOnlyAssignments(accessRepo, task.projectId, {

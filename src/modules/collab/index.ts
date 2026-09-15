@@ -9,6 +9,7 @@ import { notificationRoutes } from "./notification/notification.routes";
 import { changeRequestRoutes } from "./change-request/change-request.routes";
 import { fileRoutes } from "./file/file.routes";
 import { briefRoutes } from "./brief/brief.routes";
+import { contractRoutes } from "./contract/contract.routes";
 
 export const collabModuleRoutes = new Hono<AppEnv>();
 collabModuleRoutes.use("*", authMiddleware);
@@ -21,3 +22,4 @@ collabModuleRoutes.route("/", notificationRoutes);
 collabModuleRoutes.route("/", changeRequestRoutes);
 collabModuleRoutes.route("/", fileRoutes);
 collabModuleRoutes.route("/", briefRoutes);
+collabModuleRoutes.route("/", contractRoutes);

@@ -9,6 +9,7 @@ import type {
   projectBriefs,
   projectChangeRequests,
   projectBriefChangeLog,
+  projectContracts,
   projectTaskAssignees,
   projectTaskComments,
   projectChatMessageReads,
@@ -35,6 +36,8 @@ export type ProjectChangeRequest = InferSelectModel<typeof projectChangeRequests
 export type NewProjectChangeRequest = InferInsertModel<typeof projectChangeRequests>;
 export type ProjectBriefChangeLog = InferSelectModel<typeof projectBriefChangeLog>;
 export type NewProjectBriefChangeLog = InferInsertModel<typeof projectBriefChangeLog>;
+export type ProjectContract = InferSelectModel<typeof projectContracts>;
+export type NewProjectContract = InferInsertModel<typeof projectContracts>;
 
 export type ProjectTaskAssignee = InferSelectModel<typeof projectTaskAssignees>;
 export type NewProjectTaskAssignee = InferInsertModel<typeof projectTaskAssignees>;

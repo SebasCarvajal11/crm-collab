@@ -1,3 +1,11 @@
 dist/
 node_modules/
 *.tgz
+.pnpm-store/
+*.tsbuildinfo
+*.log
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

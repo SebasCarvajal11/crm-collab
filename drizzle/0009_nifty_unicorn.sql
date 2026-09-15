@@ -1,0 +1,1 @@
+ALTER TABLE "schema_collab"."projects" ADD COLUMN "file_repository_url" text;

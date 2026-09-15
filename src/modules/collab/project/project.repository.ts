@@ -1,5 +1,5 @@
 import type { DbOrTx } from "../shared/db.types";
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 
 import {
   projectMembers,
@@ -89,6 +89,7 @@ export const createProjectRepository = (conn: DbOrTx) => ({
 
   listProjectsForUser: async (opts: {
     userSub: string;
+    includeAll: boolean;
     type?: "campaign_service" | "product_order";
     status?: "todo" | "in_progress" | "in_review" | "completed";
     adminResponsibleSub?: string;
@@ -106,26 +107,28 @@ export const createProjectRepository = (conn: DbOrTx) => ({
       opts.clientName ? ilike(projects.clientName, `%${opts.clientName}%`) : undefined
     );
 
-    const userFilters = and(
-      inArray(
-        projects.id,
-        conn
-          .select({ projectId: projectMembers.projectId })
-          .from(projectMembers)
-          .where(eq(projectMembers.userSub, opts.userSub))
-      ),
-      filters
-    );
+    const scopedFilters = opts.includeAll
+      ? filters
+      : and(
+          inArray(
+            projects.id,
+            conn
+              .select({ projectId: projectMembers.projectId })
+              .from(projectMembers)
+              .where(eq(projectMembers.userSub, opts.userSub))
+          ),
+          filters
+        );
 
     const [totalCount] = await conn
       .select({ count: count() })
       .from(projects)
-      .where(userFilters);
+      .where(scopedFilters);
 
     const rows = await conn
       .select()
       .from(projects)
-      .where(userFilters)
+      .where(scopedFilters)
       .orderBy(desc(projects.updatedAt))
       .limit(opts.limit)
       .offset(opts.offset);
@@ -162,8 +165,10 @@ export const createProjectRepository = (conn: DbOrTx) => ({
       FROM schema_collab.projects p
       LEFT JOIN schema_collab.project_members pm_client
         ON pm_client.project_id = p.id AND pm_client.role = 'client'
-      INNER JOIN schema_collab.project_members pm_scope
-        ON pm_scope.project_id = p.id AND pm_scope.user_sub = ${opts.userSub}
+      ${opts.role === "admin" ? sql`` : sql`
+        INNER JOIN schema_collab.project_members pm_scope
+          ON pm_scope.project_id = p.id AND pm_scope.user_sub = ${opts.userSub}
+      `}
       WHERE
         p.is_archived = false
         AND (
@@ -197,6 +202,7 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         | "progressPercent"
         | "estimatedDueDate"
         | "latestApprovedFileId"
+        | "fileRepositoryUrl"
       >
     >
   ) => {

@@ -12,7 +12,6 @@ import { createFileController } from "./file.controller";
 import {
   ProjectIdParamSchema,
   ProjectTaskIdParamSchema,
-  PaginationQuerySchema,
   CreateFileSchema,
   GenerateUploadUrlSchema,
   FileIdParamSchema,

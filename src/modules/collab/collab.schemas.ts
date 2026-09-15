@@ -29,6 +29,9 @@ export const FileFolderEnum = z.enum([
 ]);
 export const ChangeRequestTypeEnum = z.enum(["minor", "formal"]);
 export const ChangeRequestStatusEnum = z.enum(["open", "accepted", "rejected", "escalated", "approved", "resolved"]);
+export const ContractStatusEnum = z.enum(["draft", "pending_signature", "signed"]);
+export const ContractProviderKindEnum = z.enum(["cima", "independent"]);
+export const ContractClientKindEnum = z.enum(["natural", "juridical"]);
 
 export const PaginationQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -63,6 +66,14 @@ export const ProjectSearchQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(20).default(8),
 });
 
+const FileRepositoryUrlSchema = z
+  .url()
+  .max(2_000)
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "https:" || protocol === "http:";
+  }, "El enlace del repositorio debe usar HTTP o HTTPS");
+
 export const CreateProjectSchema = z.object({
   name: z.string().min(3).max(140),
   description: z.string().max(2000).optional().default(""),
@@ -72,6 +83,7 @@ export const CreateProjectSchema = z.object({
   type: ProjectTypeEnum,
   estimated_due_date: z.coerce.date().optional(),
   brief: z.string().max(20000).optional().default(""),
+  file_repository_url: FileRepositoryUrlSchema.optional(),
 });
 
 export const UpdateProjectSchema = z.object({
@@ -80,6 +92,7 @@ export const UpdateProjectSchema = z.object({
   status: ParentProjectStatusEnum.optional(),
   estimated_due_date: z.coerce.date().nullable().optional(),
   progress_percent: z.coerce.number().int().min(0).max(100).optional(),
+  file_repository_url: FileRepositoryUrlSchema.nullable().optional(),
 });
 
 export const UpsertProjectMemberSchema = z.object({
@@ -252,6 +265,53 @@ export const BriefPatchSchema = z.object({
   body: z.string().min(1).max(20000),
 });
 
+const ContractCommonSchema = z.object({
+  provider_kind: ContractProviderKindEnum,
+  provider_name: z.string().trim().min(2).max(200),
+  provider_tax_id: z.string().trim().max(80).nullable().optional(),
+  provider_representative: z.string().trim().max(200).nullable().optional(),
+  provider_representative_document: z.string().trim().max(80).nullable().optional(),
+  client_kind: ContractClientKindEnum,
+  client_name: z.string().trim().min(2).max(200),
+  client_document: z.string().trim().max(80).nullable().optional(),
+  client_company_name: z.string().trim().max(200).nullable().optional(),
+  client_tax_id: z.string().trim().max(80).nullable().optional(),
+  client_representative: z.string().trim().max(200).nullable().optional(),
+  client_representative_document: z.string().trim().max(80).nullable().optional(),
+  client_email: z.string().trim().email().max(255),
+  client_phone: z.string().trim().max(50).nullable().optional(),
+  plan_name: z.string().trim().min(2).max(160),
+  monthly_fee: z.coerce.number().int().min(0).max(9_999_999_999),
+  currency: z.literal("COP").default("COP"),
+  tax_included: z.boolean().default(true),
+  term_months: z.coerce.number().int().min(1).max(120),
+  service_scope: z.string().trim().min(10).max(10_000),
+  additional_terms: z.string().trim().max(20_000).nullable().optional(),
+  signature_city: z.string().trim().min(2).max(120).default("Bogotá, D.C."),
+}).superRefine((value, ctx) => {
+  if (value.provider_kind === "cima") {
+    for (const field of ["provider_tax_id", "provider_representative", "provider_representative_document"] as const) {
+      if (!value[field]?.trim()) ctx.addIssue({ code: "custom", path: [field], message: "Este dato es obligatorio para CIMA" });
+    }
+  }
+  if (value.client_kind === "natural" && !value.client_document?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["client_document"], message: "El documento del cliente es obligatorio" });
+  }
+  if (value.client_kind === "juridical") {
+    for (const field of ["client_company_name", "client_tax_id", "client_representative", "client_representative_document"] as const) {
+      if (!value[field]?.trim()) ctx.addIssue({ code: "custom", path: [field], message: "Este dato es obligatorio para una persona jurídica" });
+    }
+  }
+});
+
+export const UpsertProjectContractSchema = ContractCommonSchema;
+export const RequestContractSignatureSchema = z.object({});
+export const SignProjectContractSchema = z.object({
+  signer_name: z.string().trim().min(2).max(200),
+  signature_data_url: z.string().regex(/^data:image\/png;base64,/, "La firma debe ser una imagen PNG").max(400_000),
+  accept_terms: z.literal(true),
+});
+
 export const CreateMinorChangeRequestSchema = z.object({
   task_id: z.string().uuid().optional(),
   title: z.string().min(3).max(200).optional(),
@@ -289,6 +349,8 @@ export type ApproveFileBody = z.infer<typeof ApproveFileSchema>;
 export type UpdateProjectFileBody = z.infer<typeof UpdateProjectFileSchema>;
 export type CreateTaskFileMetadataBody = z.infer<typeof CreateTaskFileMetadataSchema>;
 export type BriefPatchBody = z.infer<typeof BriefPatchSchema>;
+export type UpsertProjectContractBody = z.infer<typeof UpsertProjectContractSchema>;
+export type SignProjectContractBody = z.infer<typeof SignProjectContractSchema>;
 export type CreateMinorChangeRequestBody = z.infer<typeof CreateMinorChangeRequestSchema>;
 export type CreateFormalChangeRequestBody = z.infer<typeof CreateFormalChangeRequestSchema>;
 export type ResolveChangeRequestBody = z.infer<typeof ResolveChangeRequestSchema>;

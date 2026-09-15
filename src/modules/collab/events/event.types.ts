@@ -45,6 +45,7 @@ export interface ProjectCreatedEvent {
   status: "todo" | "in_progress" | "in_review" | "completed";
   description: string | null;
   progressPercent: number;
+  fileRepositoryUrl?: string | null;
   isArchived: boolean;
   createdAt: string;
   updatedAt: string;

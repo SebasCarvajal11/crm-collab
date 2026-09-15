@@ -161,6 +161,11 @@ components:
           type: string
           format: uuid
           nullable: true
+        fileRepositoryUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Enlace al repositorio externo de archivos pesados del proyecto.
         isArchived:
           type: boolean
         createdAt:
@@ -398,6 +403,62 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    ProjectContract:
+      type: object
+      required: [id, projectId, status, clientKind, clientName, clientEmail, planName, monthlyFee, termMonths, serviceScope]
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [draft, pending_signature, signed]
+        providerKind:
+          type: string
+          enum: [cima, independent]
+        providerName:
+          type: string
+        providerTaxId:
+          type: string
+          nullable: true
+        providerRepresentative:
+          type: string
+          nullable: true
+        providerRepresentativeDocument:
+          type: string
+          nullable: true
+        clientKind:
+          type: string
+          enum: [natural, juridical]
+        clientName:
+          type: string
+        clientEmail:
+          type: string
+          format: email
+        planName:
+          type: string
+        monthlyFee:
+          type: integer
+        termMonths:
+          type: integer
+        serviceScope:
+          type: string
+        contentSnapshot:
+          type: string
+          nullable: true
+        contentHash:
+          type: string
+          nullable: true
+        signedAt:
+          type: string
+          format: date-time
+          nullable: true
+        signatureCity:
+          type: string
     
     BriefChangeLog:
       type: object
@@ -566,6 +627,10 @@ paths:
                   maxLength: 140
                 description:
                   type: string
+                file_repository_url:
+                  type: string
+                  format: uri
+                  description: Enlace opcional a Drive, OneDrive u otro repositorio externo.
                 client_name:
                   type: string
                   maxLength: 160
@@ -669,6 +734,11 @@ paths:
                   type: integer
                   minimum: 0
                   maximum: 100
+                file_repository_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                  description: Enlace opcional al repositorio externo; use null para eliminarlo.
       responses:
         '200':
           description: Proyecto actualizado
@@ -1530,6 +1600,102 @@ paths:
                     $ref: '#/components/schemas/Brief'
         '403':
           description: Solo admin puede editar brief
+
+  /api/v1/collab/projects/{projectId}/contract:
+    get:
+      summary: Obtener contrato del proyecto
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Contrato o null cuando aún no existe borrador
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/ProjectContract'
+                    nullable: true
+    put:
+      summary: Guardar borrador de contrato
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider_kind, provider_name, client_kind, client_name, client_email, plan_name, monthly_fee, term_months, service_scope, signature_city]
+              properties:
+                provider_representative_document: { type: string, nullable: true }
+                signature_city: { type: string }
+      responses:
+        '200':
+          description: Borrador guardado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ProjectContract' }
+  /api/v1/collab/projects/{projectId}/contract/request-signature:
+    post:
+      summary: Congelar contrato y solicitar firma al cliente
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Contrato pendiente de firma
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ProjectContract' }
+  /api/v1/collab/projects/{projectId}/contract/sign:
+    post:
+      summary: Firmar contrato como cliente asignado
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signer_name, signature_data_url, accept_terms]
+              properties:
+                signer_name: { type: string }
+                signature_data_url: { type: string, description: Firma PNG codificada como data URL }
+                accept_terms: { type: boolean, enum: [true] }
+      responses:
+        '200':
+          description: Contrato firmado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/ProjectContract' }
 
   /api/v1/collab/projects/search:
     get:

@@ -69,7 +69,31 @@ Ver [crm-infra/ONBOARDING.md](../crm-infra/ONBOARDING.md).
 
 ```bash
 pnpm test:unit      # unitarios Vitest
-pnpm test:contract  # contrato Hurl contra gateway
+pnpm test:unit:coverage # unitarios con umbral >= 85% y reporte HTML
+pnpm test:contract  # integración Hurl contra gateway (RBAC, Kanban, chat y flujos de soporte)
+pnpm lint           # análisis estático ESLint del módulo collab
+pnpm typecheck      # validación estricta de tipos TypeScript
+```
+
+El análisis estático combina ESLint para errores de código muerto, sintaxis y
+expresiones inseguras del módulo, con TypeScript en modo estricto para validar
+los contratos de tipo de todo el servicio.
+
+La cobertura unitaria mide las reglas de dominio, autorización, acceso a
+proyectos y mapeos del módulo `collab`; los adaptadores HTTP, repositorios e
+infraestructura se validan mediante las pruebas de integración. El reporte se
+genera en `coverage/unit/index.html`.
+
+`test:contract` usa usuarios de prueba configurables mediante `ADMIN_EMAIL`,
+`ADMIN_PASSWORD`, `WORKER_EMAIL`, `WORKER_PASSWORD`, `CLIENT_EMAIL` y
+`CLIENT_PASSWORD`; sus valores por defecto son exclusivamente los del entorno
+de desarrollo sembrado.
+
+Para conservar evidencia HTML sin secretos, ejecuta:
+
+```powershell
+$env:HURL_REPORT_HTML = "html_report_sanitized"
+pnpm test:contract
 ```
 
 ## Contrato público

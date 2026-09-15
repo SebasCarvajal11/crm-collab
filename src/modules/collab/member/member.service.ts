@@ -39,7 +39,7 @@ export const createMemberService = (
       userEmail: string | undefined,
       meta: RequestMeta
     ) => {
-      const { project, member } = await assertProjectAccess(accessRepo, actor, projectId);
+      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
       if (!canManageProject(actor.role, member?.role)) throw new ForbiddenError("Solo admin gestiona miembros");
       const identity = await getUserProfilesFromSnapshots([userSub]);
       if (identity.replicaUnavailable) throw new BadRequestError("No se pudo validar la identidad del miembro; intenta de nuevo");

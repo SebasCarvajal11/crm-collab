@@ -16,12 +16,14 @@ type Actor = {
 };
 
 /**
- * Acceso a un proyecto solo por membresía en `project_members`.
- * El rol global `admin` no omite esta comprobación (aislamiento entre administradores).
+ * Los administradores globales tienen acceso a cualquier proyecto activo.
+ * No se crea una membresía implícita: el objeto virtual solo permite evaluar
+ * las capacidades del administrador sin modificar la composición del proyecto.
  */
 export const assertProjectAccess = async (repo: ProjectAccessRepo, actor: Actor, projectId: string) => {
   const project = await repo.findProjectById(projectId);
   if (!project) throw new NotFoundError("Proyecto no encontrado");
+  if (actor.role === "admin") return { project, member: { role: "admin" as const } };
   const member = await repo.findProjectMember(projectId, actor.sub);
   if (!member) throw new ForbiddenError("No eres miembro del proyecto");
   return { project, member };

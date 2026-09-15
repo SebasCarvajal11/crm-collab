@@ -49,6 +49,7 @@ export const projectProjectionEventSchema = z.object({
   status: z.enum(["todo", "in_progress", "in_review", "completed"]),
   description: z.string().nullable(),
   progressPercent: z.number().int().min(0).max(100),
+  fileRepositoryUrl: z.string().url().nullable().optional(),
   isArchived: z.boolean(),
   createdAt: z.string().datetime({ offset: true }),
   updatedAt: z.string().datetime({ offset: true }),

@@ -25,8 +25,7 @@ export const createChangeRequestService = (
   projectRepository: ReturnType<typeof createProjectRepository>,
   memberRepository: ReturnType<typeof createMemberRepository>,
   chatRepository: ReturnType<typeof createChatRepository>,
-  briefRepository: ReturnType<typeof createBriefRepository>,
-  boardRepository: ReturnType<typeof createBoardRepository>
+  briefRepository: ReturnType<typeof createBriefRepository>
 ) => {
   const accessRepo = {
     findProjectById: projectRepository.findProjectById,

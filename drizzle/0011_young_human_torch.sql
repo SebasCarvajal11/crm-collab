@@ -1,0 +1,2 @@
+ALTER TABLE "schema_collab"."project_contracts" ADD COLUMN "provider_representative_document" varchar(80);--> statement-breakpoint
+ALTER TABLE "schema_collab"."project_contracts" ADD COLUMN "signature_city" varchar(120) DEFAULT 'Bogotá, D.C.' NOT NULL;

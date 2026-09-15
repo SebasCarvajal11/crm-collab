@@ -45,6 +45,7 @@ interface ProjectSeed {
   type: "campaign_service" | "product_order";
   status: "todo" | "in_progress" | "in_review" | "completed";
   progressPercent: number;
+  fileRepositoryUrl?: string;
   brief: string;
   tasks: TaskSeed[];
   chatMessages: ChatMessageSeed[];
@@ -260,6 +261,7 @@ Modernizar la imagen de marca para atraer público más joven sin perder la eleg
   {
     name: "Identidad Visual Gym Power",
     description: "Creación de logotipo, uniformes para staff y señalética interior del gimnasio.",
+    fileRepositoryUrl: "https://drive.google.com/",
     clientName: "Gimnasio Power Fitness",
     type: "campaign_service",
     status: "in_progress",
@@ -564,6 +566,7 @@ async function seed() {
           type: projectSeed.type,
           status: projectSeed.status,
           progressPercent: projectSeed.progressPercent,
+          fileRepositoryUrl: projectSeed.fileRepositoryUrl,
           adminResponsibleSub: adminSub,
         })
         .returning();

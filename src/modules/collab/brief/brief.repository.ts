@@ -1,5 +1,5 @@
 import type { DbOrTx } from "../shared/db.types";
-import { and, count, desc, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { projectBriefs, projectBriefChangeLog } from "../../../db/schema";
 import type { NewProjectBrief, NewProjectBriefChangeLog } from "../collab.types";
 

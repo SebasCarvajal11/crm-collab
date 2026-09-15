@@ -97,10 +97,12 @@ function Invoke-InRepo([string]$RepoPath, [scriptblock]$Action) {
 $stamp = Get-Date -Format "yyyyMMddHHmmss"
 $loginIp = "198.51.100.$(Get-Random -Minimum 10 -Maximum 240)"
 $baseUrl = if ($env:COLLAB_GATEWAY_BASE_URL) { $env:COLLAB_GATEWAY_BASE_URL } else { "http://localhost:28080" }
-$workerEmail = "ana.martinez@cima.dev"
-$clientEmail = "contacto@restauranteelbuensabor.com"
-$workerPassword = "Demo123!"
-$clientPassword = "Demo123!"
+$adminEmail = if ($env:ADMIN_EMAIL) { $env:ADMIN_EMAIL } else { "admin@cima.dev" }
+$adminPassword = if ($env:ADMIN_PASSWORD) { $env:ADMIN_PASSWORD } else { "Admin123!" }
+$workerEmail = if ($env:WORKER_EMAIL) { $env:WORKER_EMAIL } else { "ana.martinez@cima.dev" }
+$clientEmail = if ($env:CLIENT_EMAIL) { $env:CLIENT_EMAIL } else { "contacto@restauranteelbuensabor.com" }
+$workerPassword = if ($env:WORKER_PASSWORD) { $env:WORKER_PASSWORD } else { "Demo123!" }
+$clientPassword = if ($env:CLIENT_PASSWORD) { $env:CLIENT_PASSWORD } else { "Demo123!" }
 $authRepo = Resolve-RepoPath -EnvVarName "CIMA_AUTH_PATH" -SiblingName "crm-auth"
 
 Ensure-LocalGatewayStack $baseUrl
@@ -113,11 +115,13 @@ hurl --test `
   --variable base_url=$baseUrl `
   --variable LOGIN_IP=$loginIp `
   --variable TEST_SUFFIX=$stamp `
+  --variable ADMIN_EMAIL=$adminEmail `
+  --secret ADMIN_PASSWORD=$adminPassword `
   --variable WORKER_EMAIL=$workerEmail `
-  --variable WORKER_PASSWORD=$workerPassword `
+  --secret WORKER_PASSWORD=$workerPassword `
   --variable CLIENT_EMAIL=$clientEmail `
-  --variable CLIENT_PASSWORD=$clientPassword `
-  tests/01_gateway_rbac_collab.hurl
+  --secret CLIENT_PASSWORD=$clientPassword `
+  tests/01_rbac_projects.hurl
 
 if ($LASTEXITCODE -ne 0) {
   exit $LASTEXITCODE

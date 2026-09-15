@@ -25,7 +25,7 @@ export class InMemoryEventBus implements EventBus {
     projectId: string,
     actorSub: string,
     data: T,
-    tx?: any
+    _tx?: any
   ): Promise<void> {
     const event: CollabEvent<T> = {
       id: uuidv7(),

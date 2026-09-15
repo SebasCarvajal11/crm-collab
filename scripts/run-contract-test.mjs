@@ -12,19 +12,29 @@ if (!collabContractFiles.length) {
 
 const failures = [];
 const baseUrl = process.env.CONTRACT_BASE_URL ?? "http://localhost:28080";
+const runId = Date.now();
+const reportDirectory = process.env.HURL_REPORT_HTML;
 
-for (const file of collabContractFiles) {
-  const result = spawnSync("hurl", [
+for (const [index, file] of collabContractFiles.entries()) {
+  const args = [
     "--test",
+    ...(reportDirectory ? ["--report-html", reportDirectory] : []),
     "--variable", `base_url=${baseUrl}`,
-    "--variable", "LOGIN_IP=127.0.0.1",
-    "--variable", `TEST_SUFFIX=contract_${Date.now()}`,
-    "--variable", "WORKER_EMAIL=ana.martinez@cima.dev",
-    "--variable", "WORKER_PASSWORD=Demo123!",
-    "--variable", "CLIENT_EMAIL=contacto@restauranteelbuensabor.com",
-    "--variable", "CLIENT_PASSWORD=Demo123!",
+    // Cada escenario autentica los tres roles; aislar su IP evita que una
+    // política de rate limiting del gateway cree dependencia entre archivos.
+    "--variable", `LOGIN_IP=198.51.100.${index + 10}`,
+    // Un único identificador por ejecución conserva los escenarios aislados y
+    // hace trazable cualquier recurso creado en la plataforma compartida.
+    "--variable", `TEST_SUFFIX=contract_${runId}`,
+    "--variable", `ADMIN_EMAIL=${process.env.ADMIN_EMAIL ?? "admin@cima.dev"}`,
+    "--secret", `ADMIN_PASSWORD=${process.env.ADMIN_PASSWORD ?? "Admin123!"}`,
+    "--variable", `WORKER_EMAIL=${process.env.WORKER_EMAIL ?? "ana.martinez@cima.dev"}`,
+    "--secret", `WORKER_PASSWORD=${process.env.WORKER_PASSWORD ?? "Demo123!"}`,
+    "--variable", `CLIENT_EMAIL=${process.env.CLIENT_EMAIL ?? "contacto@restauranteelbuensabor.com"}`,
+    "--secret", `CLIENT_PASSWORD=${process.env.CLIENT_PASSWORD ?? "Demo123!"}`,
     file,
-  ], { stdio: "inherit", shell: process.platform === "win32" });
+  ];
+  const result = spawnSync("hurl", args, { stdio: "inherit", shell: process.platform === "win32" });
 
   if (result.status !== 0) {
     failures.push({ file, exitCode: result.status ?? 1 });

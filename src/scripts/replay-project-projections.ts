@@ -49,6 +49,7 @@ async function main(): Promise<void> {
           status: project.status,
           description: project.description,
           progressPercent: project.progressPercent,
+          fileRepositoryUrl: project.fileRepositoryUrl,
           isArchived: project.isArchived,
           createdAt: project.createdAt.toISOString(),
           updatedAt: project.updatedAt.toISOString(),

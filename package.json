@@ -26,6 +26,9 @@
     "gateway:validate": "tsx scripts/validate-manifest.mjs",
     "test:contract": "node scripts/run-contract-test.mjs",
     "test:unit": "vitest run",
+    "test:unit:coverage": "vitest run --coverage",
+    "lint": "eslint src/modules/collab --max-warnings=0",
+    "typecheck": "tsc --noEmit",
     "preinstall": "pnpm dlx only-allow pnpm"
   },
   "repository": {
@@ -37,12 +40,12 @@
   },
   "homepage": "https://github.com/SebasCarvajal11/crm-collab#readme",
   "dependencies": {
-    "@sebascarvajal11/cima-contracts": "workspace:*",
     "@hono/node-server": "^1.19.14",
     "@hono/zod-validator": "^0.8.0",
+    "@sebascarvajal11/cima-contracts": "workspace:*",
     "dotenv": "^17.4.2",
-    "drizzle-orm": "^0.45.2",
     "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.12.18",
     "ioredis": "^5.11.1",
     "pg": "^8.20.0",
@@ -54,12 +57,15 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^20.11.17",
     "@types/pg": "^8.20.0",
     "@types/uuid": "^11.0.0",
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^9.39.5",
     "openapi-typescript": "^7.13.0",
-
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.8",
     "yaml": "^2.7.0"
   }
