@@ -37,6 +37,11 @@ const changeRequestController = createChangeRequestController(changeRequestServi
 export const changeRequestRoutes = new Hono<AppEnv>();
 
 changeRequestRoutes.get(
+  "/change-requests/pending",
+  changeRequestController.listPendingChangeRequests
+);
+
+changeRequestRoutes.get(
   "/projects/:projectId/change-requests",
   zValidator("param", ProjectIdParamSchema),
   zValidator("query", ListChangeRequestsQuerySchema),

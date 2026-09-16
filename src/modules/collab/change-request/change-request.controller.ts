@@ -95,4 +95,9 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
     });
     return c.json({ data: mapChangeRequestsPage(result) }, 200);
   },
+
+  listPendingChangeRequests: async (c: Context<AppEnv>) => {
+    const rows = await service.listPendingChangeRequests(actorFromContext(c));
+    return c.json({ data: rows.map(mapChangeRequest) }, 200);
+  },
 });

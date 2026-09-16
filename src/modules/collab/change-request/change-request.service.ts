@@ -280,5 +280,12 @@ export const createChangeRequestService = (
       const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
       return { items: rows, page: query.page, limit: query.limit, total, total_pages: totalPages };
     },
+
+    listPendingChangeRequests: async (actor: Actor) => {
+      if (actor.role !== "admin") {
+        throw new ForbiddenError("Solo los administradores pueden consultar las solicitudes pendientes globales");
+      }
+      return changeRequestRepository.listPendingChangeRequestsForAdmin();
+    },
   };
 };

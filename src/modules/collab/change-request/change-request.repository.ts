@@ -1,6 +1,6 @@
 import type { DbOrTx } from "../shared/db.types";
 import { and, desc, eq } from "drizzle-orm";
-import { projectChangeRequests } from "../../../db/schema";
+import { projectChangeRequests, projects } from "../../../db/schema";
 import type { NewProjectChangeRequest } from "../collab.types";
 
 export const createChangeRequestRepository = (conn: DbOrTx) => ({
@@ -61,5 +61,31 @@ export const createChangeRequestRepository = (conn: DbOrTx) => ({
       .where(eq(projectChangeRequests.id, changeRequestId))
       .returning();
     return row ?? null;
+  },
+
+  listPendingChangeRequestsForAdmin: async () => {
+    return conn
+      .select({
+        id: projectChangeRequests.id,
+        projectId: projectChangeRequests.projectId,
+        taskId: projectChangeRequests.taskId,
+        type: projectChangeRequests.type,
+        status: projectChangeRequests.status,
+        priority: projectChangeRequests.priority,
+        requestedBySub: projectChangeRequests.requestedBySub,
+        resolvedBySub: projectChangeRequests.resolvedBySub,
+        title: projectChangeRequests.title,
+        description: projectChangeRequests.description,
+        justification: projectChangeRequests.justification,
+        resolutionComment: projectChangeRequests.resolutionComment,
+        createdAt: projectChangeRequests.createdAt,
+        resolvedAt: projectChangeRequests.resolvedAt,
+        projectName: projects.name,
+        clientName: projects.clientName,
+      })
+      .from(projectChangeRequests)
+      .innerJoin(projects, eq(projectChangeRequests.projectId, projects.id))
+      .where(eq(projectChangeRequests.status, "open"))
+      .orderBy(desc(projectChangeRequests.createdAt));
   },
 });

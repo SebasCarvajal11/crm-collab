@@ -112,4 +112,29 @@ describe("ChangeRequestService", () => {
     );
     expect(result).toBeDefined();
   });
+
+  it("throws ForbiddenError when non-admin calls listPendingChangeRequests", async () => {
+    await expect(
+      service.listPendingChangeRequests({
+        sub: "worker-sub",
+        userId: "worker-sub",
+        role: "worker",
+        email: "worker@cima.com",
+      })
+    ).rejects.toThrow("Solo los administradores pueden consultar las solicitudes pendientes globales");
+  });
+
+  it("allows admin to list pending change requests", async () => {
+    (changeRequestRepo as any).listPendingChangeRequestsForAdmin = vi.fn().mockResolvedValue([
+      { id: "cr-pending-1", title: "Cambio pendiente", projectName: "Proyecto 1" },
+    ]);
+    const result = await service.listPendingChangeRequests({
+      sub: "admin-sub",
+      userId: "admin-sub",
+      role: "admin",
+      email: "admin@cima.com",
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].title).toBe("Cambio pendiente");
+  });
 });

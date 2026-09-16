@@ -172,6 +172,12 @@
       "openapi_ref": "PATCH /api/v1/collab/notifications/{notificationId}/read"
     },
     {
+      "endpoint": "/api/v1/collab/change-requests/pending",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/change-requests/pending",
+      "openapi_ref": "GET /api/v1/collab/change-requests/pending"
+    },
+    {
       "endpoint": "/api/v1/collab/projects/{projectId}/change-requests/minor",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/change-requests/minor",
