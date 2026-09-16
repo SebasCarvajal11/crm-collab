@@ -37,11 +37,11 @@ export const createChangeRequestService = (
     createMinorChangeRequest: async (
       actor: Actor,
       projectId: string,
-      payload: { taskId?: string; title?: string; description: string },
+      payload: { taskId?: string; title?: string; description: string; priority?: "low" | "medium" | "high" | "urgent" },
       meta: RequestMeta
     ) => {
       await assertProjectAccess(accessRepo, actor, projectId);
-      if (actor.role !== "client") throw new ForbiddenError("Solo cliente solicita ajuste menor");
+      if (actor.role !== "client") throw new ForbiddenError("Solo el cliente puede solicitar cambios");
       return db.transaction(async (tx) => {
       const txBoardRepository = createBoardRepository(tx);
       const txChangeRequestRepository = createChangeRequestRepository(tx);
@@ -83,6 +83,7 @@ export const createChangeRequestService = (
         title: title,
         description: payload.description,
         justification: null,
+        priority: payload.priority ?? "medium",
       });
       await txChatRepository.createChatMessage({
         projectId,
@@ -117,10 +118,11 @@ export const createChangeRequestService = (
     createFormalChangeRequest: async (
       actor: Actor,
       projectId: string,
-      payload: { taskId?: string; title?: string; description: string; justification?: string },
+      payload: { taskId?: string; title?: string; description: string; justification?: string; priority?: "low" | "medium" | "high" | "urgent" },
       meta: RequestMeta
     ) => {
       await assertProjectAccess(accessRepo, actor, projectId);
+      if (actor.role !== "client") throw new ForbiddenError("Solo el cliente puede solicitar cambios");
       const title = payload.title || "Solicitud de Cambio Formal";
       const justification = payload.justification || "Justificación predeterminada";
       return db.transaction(async (tx) => {
@@ -135,6 +137,7 @@ export const createChangeRequestService = (
         title: title,
         description: payload.description,
         justification: justification,
+        priority: payload.priority ?? "medium",
       });
       await txChatRepository.createChatMessage({
         projectId,
@@ -171,30 +174,23 @@ export const createChangeRequestService = (
       projectId: string,
       changeRequestId: string,
       status: "accepted" | "rejected" | "escalated" | "approved",
+      comment: string | undefined,
       meta: RequestMeta
     ) => {
       const req = await changeRequestRepository.findChangeRequestById(changeRequestId);
       if (!req || req.projectId !== projectId) throw new NotFoundError("Solicitud no encontrada");
-      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
-      if (req.type === "minor") {
-        const canResolveMinor =
-          actor.role === "admin" || member.role === "worker" || member.role === "admin";
-        if (!canResolveMinor) {
-          throw new ForbiddenError("Solo worker o administrador del proyecto resuelven ajuste menor");
-        }
-      } else {
-        if (actor.role !== "admin") {
-          throw new ForbiddenError(
-            "Solo un administrador del sistema puede aprobar o rechazar un cambio formal"
-          );
-        }
+      await assertProjectAccess(accessRepo, actor, projectId);
+      if (actor.role !== "admin") {
+        throw new ForbiddenError("Solo un administrador puede aceptar o rechazar solicitudes de cambio");
       }
       return db.transaction(async (tx) => {
       const txChangeRequestRepository = createChangeRequestRepository(tx);
       const txBriefRepository = createBriefRepository(tx);
+      const txChatRepository = createChatRepository(tx);
       const updated = await txChangeRequestRepository.updateChangeRequestById(changeRequestId, {
         status,
         resolvedBySub: actor.sub,
+        resolutionComment: comment ?? null,
         escalatedByWorkerSub: status === "escalated" ? actor.sub : undefined,
       });
       if (!updated) throw new NotFoundError("Solicitud no encontrada");
@@ -214,7 +210,19 @@ export const createChangeRequestService = (
         resourceId: req.id,
         ipAddress: meta.ipAddress,
         userAgent: meta.userAgent,
-        details: { status, type: req.type },
+        details: { status, type: req.type, comment: comment ?? null },
+      });
+
+      const isApproved = status === "accepted" || status === "approved";
+      const statusLabel = isApproved ? "aceptada" : "rechazada";
+      const reasonText = comment ? ` Motivo: ${comment}` : "";
+      await txChatRepository.createChatMessage({
+        projectId,
+        channel: "external",
+        messageType: isApproved ? "minor_request" : "formal_request",
+        authorSub: actor.sub,
+        body: `Solicitud de cambio ${statusLabel}: "${req.title}".${reasonText}`,
+        metadata: { changeRequestId: req.id, status, comment: comment ?? null },
       });
 
       if (req.type === "minor") {
@@ -247,6 +255,15 @@ export const createChangeRequestService = (
 
       return updated;
       });
+    },
+
+    listChangeRequests: async (
+      actor: Actor,
+      projectId: string,
+      filters?: { type?: "minor" | "formal"; status?: "open" | "accepted" | "rejected" | "escalated" | "approved" }
+    ) => {
+      await assertProjectAccess(accessRepo, actor, projectId);
+      return changeRequestRepository.listChangeRequestsByProject(projectId, filters);
     },
 
     listFormalChangeLog: async (

@@ -18,21 +18,37 @@ export const createChangeRequestRepository = (conn: DbOrTx) => ({
     return row ?? null;
   },
 
-  listChangeRequestsByProject: async (projectId: string, type?: "minor" | "formal") =>
-    conn
+  listChangeRequestsByProject: async (
+    projectId: string,
+    filters?: "minor" | "formal" | { type?: "minor" | "formal"; status?: "open" | "accepted" | "rejected" | "escalated" | "approved" }
+  ) => {
+    const typeFilter = typeof filters === "string" ? filters : filters?.type;
+    const statusFilter = typeof filters === "object" ? filters?.status : undefined;
+    return conn
       .select()
       .from(projectChangeRequests)
       .where(
-        and(eq(projectChangeRequests.projectId, projectId), type ? eq(projectChangeRequests.type, type) : undefined)
+        and(
+          eq(projectChangeRequests.projectId, projectId),
+          typeFilter ? eq(projectChangeRequests.type, typeFilter) : undefined,
+          statusFilter ? eq(projectChangeRequests.status, statusFilter) : undefined
+        )
       )
-      .orderBy(desc(projectChangeRequests.createdAt)),
+      .orderBy(desc(projectChangeRequests.createdAt));
+  },
 
   updateChangeRequestById: async (
     changeRequestId: string,
     patch: Partial<
       Pick<
         NewProjectChangeRequest,
-        "status" | "resolvedBySub" | "escalatedByWorkerSub" | "description" | "justification" | "title"
+        | "status"
+        | "resolvedBySub"
+        | "escalatedByWorkerSub"
+        | "description"
+        | "justification"
+        | "title"
+        | "resolutionComment"
       >
     >
   ) => {

@@ -341,6 +341,16 @@
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/contract/sign",
       "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/sign"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/change-requests",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/projects/{projectId}/change-requests",
+      "input_query_strings": [
+        "type",
+        "status"
+      ],
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/change-requests"
     }
   ]
 }

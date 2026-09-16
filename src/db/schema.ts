@@ -423,6 +423,8 @@ export const projectChangeRequests = collabSchema.table(
     title: varchar("title", { length: 200 }).notNull(),
     description: text("description").notNull(),
     justification: text("justification"),
+    priority: varchar("priority", { length: 20 }).default("medium").notNull(),
+    resolutionComment: text("resolution_comment"),
     channelMessageId: uuid("channel_message_id"),
     escalatedByWorkerSub: uuid("escalated_by_worker_sub"),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),

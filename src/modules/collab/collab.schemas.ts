@@ -311,11 +311,11 @@ export const SignProjectContractSchema = z.object({
   signature_data_url: z.string().regex(/^data:image\/png;base64,/, "La firma debe ser una imagen PNG").max(400_000),
   accept_terms: z.literal(true),
 });
-
 export const CreateMinorChangeRequestSchema = z.object({
   task_id: z.string().uuid().optional(),
   title: z.string().min(3).max(200).optional(),
   description: z.string().min(1).max(300),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
 });
 
 export const CreateFormalChangeRequestSchema = z.object({
@@ -323,10 +323,17 @@ export const CreateFormalChangeRequestSchema = z.object({
   title: z.string().min(3).max(200).optional(),
   description: z.string().min(1).max(5000),
   justification: z.string().min(1).max(3000).optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
 });
 
 export const ResolveChangeRequestSchema = z.object({
   status: ChangeRequestStatusEnum.refine((s) => s !== "open", "El estado debe cerrar o escalar la solicitud"),
+  comment: z.string().max(2000).optional(),
+});
+
+export const ListChangeRequestsQuerySchema = z.object({
+  type: ChangeRequestTypeEnum.optional(),
+  status: ChangeRequestStatusEnum.optional(),
 });
 
 export type ProjectFiltersQuery = z.infer<typeof ProjectFiltersQuerySchema>;
@@ -334,6 +341,7 @@ export type ProjectTasksQuery = z.infer<typeof ProjectTasksQuerySchema>;
 export type ChatMessageQuery = z.infer<typeof ChatMessageQuerySchema>;
 export type ProjectFilesQuery = z.infer<typeof ProjectFilesQuerySchema>;
 export type FormalChangeLogQuery = z.infer<typeof FormalChangeLogQuerySchema>;
+export type ListChangeRequestsQuery = z.infer<typeof ListChangeRequestsQuerySchema>;
 export type ProjectSearchQuery = z.infer<typeof ProjectSearchQuerySchema>;
 export type CreateProjectBody = z.infer<typeof CreateProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof UpdateProjectSchema>;

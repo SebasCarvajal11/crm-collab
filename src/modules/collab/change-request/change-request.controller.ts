@@ -7,6 +7,7 @@ import type {
   CreateFormalChangeRequestBody,
   ResolveChangeRequestBody,
   FormalChangeLogQuery,
+  ListChangeRequestsQuery,
 } from "../collab.schemas";
 import type { createChangeRequestService } from "./change-request.service";
 
@@ -39,7 +40,7 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
     const row = await service.createMinorChangeRequest(
       actorFromContext(c),
       requiredParam(c, "projectId"),
-      { taskId: body.task_id, title: body.title, description: body.description },
+      { taskId: body.task_id, title: body.title, description: body.description, priority: body.priority },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
     return c.json({ data: mapChangeRequest(row) }, 201);
@@ -55,6 +56,7 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
         title: body.title,
         description: body.description,
         justification: body.justification,
+        priority: body.priority,
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
@@ -69,9 +71,20 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
       requiredParam(c, "projectId"),
       requiredParam(c, "changeRequestId"),
       inputStatus as any,
+      body.comment,
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
     return c.json({ data: mapChangeRequest(row) }, 200);
+  },
+
+  listChangeRequests: async (c: Context<AppEnv>) => {
+    const q = validatedQuery<ListChangeRequestsQuery>(c);
+    const status = q.status === "resolved" ? "accepted" : q.status;
+    const rows = await service.listChangeRequests(actorFromContext(c), requiredParam(c, "projectId"), {
+      type: q.type,
+      status: status as any,
+    });
+    return c.json({ data: rows.map(mapChangeRequest) }, 200);
   },
 
   listFormalChangeLog: async (c: Context<AppEnv>) => {

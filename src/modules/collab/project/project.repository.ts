@@ -11,8 +11,8 @@ import type {
 
 type ProjectTimelineItemRow = {
   id: string;
-  kind: "file" | "task_completed" | "change_accepted";
-  label: "Archivo" | "Tarea finalizada" | "Cambio aceptado";
+  kind: "file" | "task_completed" | "change_accepted" | "change_rejected";
+  label: "Archivo" | "Tarea finalizada" | "Cambio aceptado" | "Cambio rechazado";
   title: string;
   occurredAt: Date;
   fileId: string | null;
@@ -22,6 +22,9 @@ type ProjectTimelineItemRow = {
   changeRequestId: string | null;
   createdBySub: string | null;
   createdByEmail: string | null;
+  requestedBySub?: string | null;
+  resolvedBySub?: string | null;
+  resolutionComment?: string | null;
   isClientVisible: boolean;
 };
 
@@ -234,7 +237,7 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         SELECT cr.id FROM schema_collab.project_change_requests cr
         LEFT JOIN schema_collab.project_tasks t ON t.id = cr.task_id
         WHERE cr.project_id = ${projectId}
-          AND cr.status IN ('accepted', 'approved')
+          AND cr.status IN ('accepted', 'approved', 'rejected')
           AND cr.resolved_at IS NOT NULL
           AND (${isClientView} = false OR COALESCE(t.is_client_visible, true) = true)
       ) AS unified_timeline
@@ -255,7 +258,10 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         NULL::uuid AS "changeRequestId",
         f.created_by_sub AS "createdBySub",
         f.created_by_email AS "createdByEmail",
-        f.is_client_visible AS "isClientVisible"
+        f.is_client_visible AS "isClientVisible",
+        NULL::uuid AS "requestedBySub",
+        NULL::uuid AS "resolvedBySub",
+        NULL::text AS "resolutionComment"
       FROM schema_collab.project_files f
       WHERE f.project_id = ${projectId}
         AND (${isClientView} = false OR f.is_client_visible = true)
@@ -275,7 +281,10 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         NULL::uuid AS "changeRequestId",
         t.assignee_sub AS "createdBySub",
         NULL::varchar AS "createdByEmail",
-        t.is_client_visible AS "isClientVisible"
+        t.is_client_visible AS "isClientVisible",
+        NULL::uuid AS "requestedBySub",
+        NULL::uuid AS "resolvedBySub",
+        NULL::text AS "resolutionComment"
       FROM schema_collab.project_tasks t
       INNER JOIN schema_collab.project_task_columns c ON c.id = t.column_id
       WHERE t.project_id = ${projectId}
@@ -287,8 +296,14 @@ export const createProjectRepository = (conn: DbOrTx) => ({
 
       SELECT
         cr.id AS "id",
-        'change_accepted'::text AS "kind",
-        'Cambio aceptado'::text AS "label",
+        CASE
+          WHEN cr.status = 'rejected' THEN 'change_rejected'::text
+          ELSE 'change_accepted'::text
+        END AS "kind",
+        CASE
+          WHEN cr.status = 'rejected' THEN 'Cambio rechazado'::text
+          ELSE 'Cambio aceptado'::text
+        END AS "label",
         cr.title AS "title",
         cr.resolved_at AS "occurredAt",
         NULL::uuid AS "fileId",
@@ -298,11 +313,14 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         cr.id AS "changeRequestId",
         cr.resolved_by_sub AS "createdBySub",
         NULL::varchar AS "createdByEmail",
-        COALESCE(t.is_client_visible, true) AS "isClientVisible"
+        COALESCE(t.is_client_visible, true) AS "isClientVisible",
+        cr.requested_by_sub AS "requestedBySub",
+        cr.resolved_by_sub AS "resolvedBySub",
+        cr.resolution_comment AS "resolutionComment"
       FROM schema_collab.project_change_requests cr
       LEFT JOIN schema_collab.project_tasks t ON t.id = cr.task_id
       WHERE cr.project_id = ${projectId}
-        AND cr.status IN ('accepted', 'approved')
+        AND cr.status IN ('accepted', 'approved', 'rejected')
         AND cr.resolved_at IS NOT NULL
         AND (${isClientView} = false OR COALESCE(t.is_client_visible, true) = true)
 

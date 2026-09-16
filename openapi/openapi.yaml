@@ -1248,6 +1248,44 @@ paths:
                   data:
                     $ref: '#/components/schemas/ChatMessage'
 
+  /api/v1/collab/projects/{projectId}/change-requests:
+    get:
+      summary: Listar solicitudes de cambio del proyecto
+      description: Miembros del proyecto y administradores pueden listar
+      tags:
+        - Change Requests
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [minor, formal]
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [open, accepted, rejected, escalated, approved, resolved]
+      responses:
+        '200':
+          description: Lista de solicitudes de cambio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChangeRequest'
+
   /api/v1/collab/projects/{projectId}/change-requests/minor:
     post:
       summary: Crear solicitud de ajuste menor

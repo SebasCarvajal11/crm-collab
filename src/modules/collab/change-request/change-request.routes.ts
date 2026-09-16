@@ -16,6 +16,7 @@ import {
   CreateFormalChangeRequestSchema,
   ResolveChangeRequestSchema,
   FormalChangeLogQuerySchema,
+  ListChangeRequestsQuerySchema,
 } from "../collab.schemas";
 
 const changeRequestRepository = createChangeRequestRepository(db);
@@ -34,6 +35,13 @@ const changeRequestService = createChangeRequestService(
 const changeRequestController = createChangeRequestController(changeRequestService);
 
 export const changeRequestRoutes = new Hono<AppEnv>();
+
+changeRequestRoutes.get(
+  "/projects/:projectId/change-requests",
+  zValidator("param", ProjectIdParamSchema),
+  zValidator("query", ListChangeRequestsQuerySchema),
+  changeRequestController.listChangeRequests
+);
 
 changeRequestRoutes.post(
   "/projects/:projectId/change-requests/minor",
