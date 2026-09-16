@@ -1247,6 +1247,31 @@ paths:
                 properties:
                   data:
                     $ref: '#/components/schemas/ChatMessage'
+  /api/v1/collab/change-requests/pending:
+    get:
+      summary: Listar todas las solicitudes de cambio pendientes
+      description: Solo administradores pueden consultar cambios pendientes en todos los proyectos
+      tags:
+        - Change Requests
+      responses:
+        '200':
+          description: Lista global de solicitudes de cambio pendientes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/ChangeRequest'
+                        - type: object
+                          properties:
+                            projectName:
+                              type: string
+                            clientName:
+                              type: string
 
   /api/v1/collab/projects/{projectId}/change-requests:
     get:
