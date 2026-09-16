@@ -466,40 +466,45 @@ export const createBoardService = (
       if (physicalMeta.sizeBytes > MAX_BYTES) throw new BadRequestError("El archivo supera el límite de 25 MB");
       assertAllowedUploadMime(physicalMeta.mimeType, fileName);
       return db.transaction(async (tx) => {
-      const txBoardRepository = createBoardRepository(tx);
-      const file = await txBoardRepository.createFileForTask({
-        projectId,
-        taskId,
-        title: payload.title,
-        description: payload.description,
-        origin: "manual_upload",
-        folder: "shared_deliverables",
-        fileName,
-        storagePath: payload.storagePath,
-        mimeType: physicalMeta.mimeType,
-        sizeBytes: physicalMeta.sizeBytes,
-        isClientVisible: payload.isClientVisible,
-        isActive: true,
-        approvedByClient: false,
-        version: 1,
-        createdBySub: actor.sub,
-        createdByEmail: payload.authorEmail,
-      });
-      await createAuditRepository(tx).createAuditLog({
-        actorSub: actor.sub,
-        action: "task_file_uploaded",
-        resourceType: "project_file",
-        resourceId: file.id,
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        details: { taskId, fileName: payload.fileName, sizeBytes: payload.sizeBytes },
-      });
-      await collabEvents.emit("file.uploaded", projectId, actor.sub, {
-        fileId: file.id,
-        fileName: file.fileName,
-        isClientVisible: file.isClientVisible,
-      }, tx);
-      return file;
+        const txFileRepository = createFileRepository(tx);
+        await txFileRepository.lockFileVersionSequence(projectId, fileName);
+        const latest = await txFileRepository.findLatestVersion(projectId, fileName);
+        const version = (latest?.version ?? 0) + 1;
+
+        const txBoardRepository = createBoardRepository(tx);
+        const file = await txBoardRepository.createFileForTask({
+          projectId,
+          taskId,
+          title: payload.title,
+          description: payload.description,
+          origin: "manual_upload",
+          folder: "shared_deliverables",
+          fileName,
+          storagePath: payload.storagePath,
+          mimeType: physicalMeta.mimeType,
+          sizeBytes: physicalMeta.sizeBytes,
+          isClientVisible: payload.isClientVisible,
+          isActive: true,
+          approvedByClient: false,
+          version,
+          createdBySub: actor.sub,
+          createdByEmail: payload.authorEmail,
+        });
+        await createAuditRepository(tx).createAuditLog({
+          actorSub: actor.sub,
+          action: "task_file_uploaded",
+          resourceType: "project_file",
+          resourceId: file.id,
+          ipAddress: meta.ipAddress,
+          userAgent: meta.userAgent,
+          details: { taskId, fileName: payload.fileName, sizeBytes: payload.sizeBytes, version },
+        });
+        await collabEvents.emit("file.uploaded", projectId, actor.sub, {
+          fileId: file.id,
+          fileName: file.fileName,
+          isClientVisible: file.isClientVisible,
+        }, tx);
+        return file;
       });
     },
   };
