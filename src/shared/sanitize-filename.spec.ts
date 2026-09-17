@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { sanitizeFileName, formatContentDisposition } from "./sanitize-filename";
 
 describe("sanitize-filename", () => {
-  // ci: verificacion de integracion y despliegue continuo v2.5.0
   describe("sanitizeFileName", () => {
     it("should remove unsafe filesystem characters", () => {
       const input = "test/file\\name:*.txt";
