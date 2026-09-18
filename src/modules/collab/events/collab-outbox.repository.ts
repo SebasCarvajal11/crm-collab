@@ -48,7 +48,7 @@ export const createCollabOutboxRepository = (conn: DbOrTx) => ({
         LIMIT ${opts.limit}
         FOR UPDATE SKIP LOCKED
       )
-      ), claimed AS (
+      , claimed AS (
         UPDATE schema_collab.collab_outbox AS outbox
         SET
           status = 'processing',

@@ -1,5 +1,5 @@
 import type { DbOrTx } from "../shared/db.types";
-import { and, asc, count, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import { BadRequestError } from "../../../shared/middlewares/error-handler.middleware";
 import {
   projectFiles,
@@ -195,56 +195,57 @@ export const createBoardRepository = (conn: DbOrTx) => ({
       return [];
     }
 
-    const incomingIds = subtasks.map(s => s.id).filter(Boolean) as string[];
+    const incomingIds = subtasks.map((s) => s.id).filter(Boolean) as string[];
     if (new Set(incomingIds).size !== incomingIds.length) {
       throw new BadRequestError("Una subtarea no puede aparecer más de una vez");
     }
 
-    // A supplied ID is only valid when it already belongs to this task. Without
-    // this guard, an ID from a different task could win the PK conflict and have
-    // its title/status overwritten by the current update.
     if (incomingIds.length > 0) {
-      const ownedSubtasks = await conn
+      const foreignSubtasks = await conn
         .select({ id: projectSubtasks.id })
         .from(projectSubtasks)
-        .where(and(eq(projectSubtasks.taskId, taskId), inArray(projectSubtasks.id, incomingIds)));
-      if (ownedSubtasks.length !== incomingIds.length) {
+        .where(and(ne(projectSubtasks.taskId, taskId), inArray(projectSubtasks.id, incomingIds)));
+      if (foreignSubtasks.length > 0) {
         throw new BadRequestError("Una o más subtareas no pertenecen a la tarea");
       }
     }
-    
-    // Delete ones removed from the list
-    if (incomingIds.length > 0) {
-      await conn.delete(projectSubtasks).where(
-        and(
-          eq(projectSubtasks.taskId, taskId),
-          notInArray(projectSubtasks.id, incomingIds)
-        )
-      );
-    } else {
-      await conn.delete(projectSubtasks).where(eq(projectSubtasks.taskId, taskId));
-    }
 
-    // Upsert remaining
-    return conn.insert(projectSubtasks).values(
-      subtasks.map((s, i) => ({
-        id: s.id || undefined,
-        taskId,
-        title: s.title,
-        isCompleted: s.isCompleted,
-        assigneeSub: s.assigneeSub || null,
-        position: s.position ?? i,
-      }))
-    ).onConflictDoUpdate({
-      target: projectSubtasks.id,
-      set: {
-        title: sql`excluded.title`,
-        isCompleted: sql`excluded.is_completed`,
-        assigneeSub: sql`excluded.assignee_sub`,
-        position: sql`excluded.position`,
-        updatedAt: new Date(),
-      }
-    }).returning();
+    const existing = incomingIds.length > 0
+      ? await conn
+          .select({ id: projectSubtasks.id })
+          .from(projectSubtasks)
+          .where(and(eq(projectSubtasks.taskId, taskId), inArray(projectSubtasks.id, incomingIds)))
+      : [];
+    const existingIdSet = new Set(existing.map((s) => s.id));
+
+    const deleteWhere = existingIdSet.size > 0
+      ? and(eq(projectSubtasks.taskId, taskId), notInArray(projectSubtasks.id, Array.from(existingIdSet)))
+      : eq(projectSubtasks.taskId, taskId);
+    await conn.delete(projectSubtasks).where(deleteWhere);
+
+    return conn
+      .insert(projectSubtasks)
+      .values(
+        subtasks.map((s, i) => ({
+          id: s.id && existingIdSet.has(s.id) ? s.id : undefined,
+          taskId,
+          title: s.title,
+          isCompleted: s.isCompleted,
+          assigneeSub: s.assigneeSub || null,
+          position: s.position ?? i,
+        }))
+      )
+      .onConflictDoUpdate({
+        target: projectSubtasks.id,
+        set: {
+          title: sql`excluded.title`,
+          isCompleted: sql`excluded.is_completed`,
+          assigneeSub: sql`excluded.assignee_sub`,
+          position: sql`excluded.position`,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
   },
 
   updateTaskById: async (

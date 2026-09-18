@@ -194,7 +194,7 @@ export const createBoardService = (
           }, tx);
         }
       }
-      return task;
+      return (await txBoardRepository.findTaskById(task.id)) ?? task;
       });
     },
 
@@ -355,7 +355,7 @@ export const createBoardService = (
         }
       }
 
-      return updated;
+      return (await txBoardRepository.findTaskById(taskId)) ?? updated;
       });
     },
 
