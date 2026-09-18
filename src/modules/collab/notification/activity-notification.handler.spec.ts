@@ -19,4 +19,8 @@ describe("resolveActivityRecipients", () => {
   it("limits assignment activity to its selected recipients and excludes the actor", () => {
     expect(resolveActivityRecipients(members, "admin", "internal", ["admin", "worker"]).map(({ userSub }) => userSub)).toEqual(["worker"]);
   });
+
+  it("excludes already mentioned members from activity notifications", () => {
+    expect(resolveActivityRecipients(members, "admin", "external", undefined, ["worker"]).map(({ userSub }) => userSub)).toEqual(["client"]);
+  });
 });

@@ -4,7 +4,15 @@ import { createMemberRepository } from "../member/member.repository";
 import { createActivityNotificationRepository } from "./activity-notification.repository";
 import { getRedisConnection } from "../../../shared/redis";
 
-type Activity = { channel: "internal" | "external"; title: string; body: string; resourceType: string; resourceId?: string; recipients?: string[] };
+type Activity = {
+  channel: "internal" | "external";
+  title: string;
+  body: string;
+  resourceType: string;
+  resourceId?: string;
+  recipients?: string[];
+  excludedRecipients?: string[];
+};
 type Member = { userSub: string; role: "admin" | "worker" | "client" };
 
 const text = (value: unknown, fallback: string) => typeof value === "string" && value.trim() ? value.slice(0, 300) : fallback;
@@ -16,7 +24,13 @@ export async function persistActivityNotification(event: CollabEvent<CollabEvent
   if (!activity) return;
 
   const members = await createMemberRepository(db).listProjectMembers(event.projectId);
-  const recipients = resolveActivityRecipients(members, event.actorSub, activity.channel, activity.recipients);
+  const recipients = resolveActivityRecipients(
+    members,
+    event.actorSub,
+    activity.channel,
+    activity.recipients,
+    activity.excludedRecipients
+  );
 
   const created = await createActivityNotificationRepository(db).create(
     recipients.map((member) => ({
@@ -42,18 +56,45 @@ export function resolveActivityRecipients(
   members: Member[],
   actorSub: string,
   channel: "internal" | "external",
-  explicitRecipients?: string[]
+  explicitRecipients?: string[],
+  excludedRecipients?: string[]
 ): Member[] {
+  const excluded = new Set(excludedRecipients ?? []);
   if (explicitRecipients) {
     const allowed = new Set(explicitRecipients);
-    return members.filter((member) => member.userSub !== actorSub && allowed.has(member.userSub));
+    return members.filter(
+      (member) => member.userSub !== actorSub && !excluded.has(member.userSub) && allowed.has(member.userSub)
+    );
   }
-  return members.filter((member) => member.userSub !== actorSub && (channel === "external" || member.role !== "client"));
+  return members.filter(
+    (member) =>
+      member.userSub !== actorSub &&
+      !excluded.has(member.userSub) &&
+      (channel === "external" || member.role !== "client")
+  );
 }
 
 function describe(type: CollabEvent<CollabEventPayload>["type"], data: Record<string, unknown>): Activity | null {
   const taskTitle = text(data.taskTitle, "una tarea");
   switch (type) {
+    case "chat.message.internal":
+      return {
+        channel: "internal",
+        title: "Mensaje en chat interno",
+        body: text(data.body, "Nuevo mensaje"),
+        resourceType: "chat_message",
+        resourceId: text(data.messageId, ""),
+        excludedRecipients: arrayOfStrings(data.mentionedSubs),
+      };
+    case "chat.message.external":
+      return {
+        channel: "external",
+        title: "Mensaje en el proyecto",
+        body: text(data.body, "Nuevo mensaje"),
+        resourceType: "chat_message",
+        resourceId: text(data.messageId, ""),
+        excludedRecipients: arrayOfStrings(data.mentionedSubs),
+      };
     case "task.assigned":
       return { channel: "internal", title: "Nueva tarea asignada", body: taskTitle, resourceType: "project_task", resourceId: text(data.taskId, ""), recipients: [text(data.assigneeSub, "")] };
     case "task.moved":

@@ -175,6 +175,7 @@ export const createChatService = (
         messageId: row.id,
         channel,
         body,
+        mentionedSubs: mentionSubs.length > 0 ? mentionSubs : undefined,
       }, tx);
 
       if (mentionSubs.length > 0) {
