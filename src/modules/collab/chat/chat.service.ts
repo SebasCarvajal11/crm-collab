@@ -9,6 +9,9 @@ import { createChatRepository } from "./chat.repository";
 import { createProjectRepository } from "../project/project.repository";
 import { createMemberRepository } from "../member/member.repository";
 import { createNotificationRepository } from "../notification/notification.repository";
+import { createActivityNotificationRepository } from "../notification/activity-notification.repository";
+import { chatTypingStore } from "./chat-typing.store";
+import { mapChatMessageItem } from "./chat-item.mapper";
 import { db } from "../../../db/connection";
 import { getUserProfilesFromSnapshots } from "../../../shared/identity-snapshot-store";
 
@@ -25,7 +28,8 @@ export const createChatService = (
   chatRepository: ReturnType<typeof createChatRepository>,
   projectRepository: ReturnType<typeof createProjectRepository>,
   memberRepository: ReturnType<typeof createMemberRepository>,
-  notificationRepository: ReturnType<typeof createNotificationRepository>
+  notificationRepository: ReturnType<typeof createNotificationRepository>,
+  activityRepository?: ReturnType<typeof createActivityNotificationRepository>
 ) => {
   const accessRepo = {
     findProjectById: projectRepository.findProjectById,
@@ -76,33 +80,12 @@ export const createChatService = (
         ? await getUserProfilesFromSnapshots(authorSubs)
         : { profiles: new Map() };
 
-      const items = messages.map((msg) => {
-        const readers = readersByMessage.get(msg.id) ?? new Set<string>();
-        const msgReads = readsByMessage.get(msg.id) ?? [];
-        const authorMember = msg.authorSub ? memberBySub.get(msg.authorSub) : undefined;
-        const required = visibleRecipients
-          .map((m) => m.userSub)
-          .filter((sub) => sub !== msg.authorSub);
-        const seenCount = required.filter((sub) => readers.has(sub)).length;
-        const isSeen = required.length === 0 ? true : seenCount === required.length;
-        const profile = msg.authorSub ? profiles.get(msg.authorSub) : undefined;
-        return {
-          ...msg,
-          authorFirstName: profile?.firstName ?? null,
-          authorLastName: profile?.lastName ?? null,
-          authorRole: authorMember?.role ?? profile?.role ?? null,
-          authorProfession: profile?.profession ?? null,
-          readStatus: {
-            isSeen,
-            requiredCount: required.length,
-            seenCount,
-            reads: msgReads,
-          },
-        };
-      });
+      const mapperCtx = { readersByMessage, readsByMessage, memberBySub, visibleRecipients, profiles };
+      const items = messages.map((msg) => mapChatMessageItem(msg, mapperCtx));
 
       const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
-      return { items, page: query.page, limit: query.limit, total, total_pages: totalPages };
+      const typing = chatTypingStore.getActiveTypers(projectId, channel, actor.sub);
+      return { items, page: query.page, limit: query.limit, total, total_pages: totalPages, typing };
     },
 
     postChatMessage: async (
@@ -242,6 +225,9 @@ export const createChatService = (
         if (target) {
           await chatRepository.markChatMessagesReadUpTo(projectId, channel, target.createdAt, actor.sub);
           await notificationRepository.markMentionNotificationsSeenUpTo(actor.sub, projectId, channel, target.createdAt);
+          if (activityRepository) {
+            await activityRepository.markChatActivitiesSeenUpTo(actor.sub, projectId, channel, target.createdAt);
+          }
           markedUpTo = true;
         }
       }
@@ -272,6 +258,20 @@ export const createChatService = (
       }
 
       return { marked: uniqueIds.length };
+    },
+
+    setTyping: async (actor: Actor, projectId: string, channel: "internal" | "external") => {
+      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
+      if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
+        throw new ForbiddenError("No tienes acceso al chat interno");
+      }
+      const { profiles } = await getUserProfilesFromSnapshots([actor.sub]);
+      const profile = profiles.get(actor.sub);
+      const name = profile?.firstName
+        ? `${profile.firstName} ${profile.lastName ?? ""}`.trim()
+        : actor.email;
+      chatTypingStore.setTyping(projectId, channel, actor.sub, name);
+      return { ok: true };
     },
   };
 };

@@ -29,6 +29,7 @@ const mapMessagesPage = (result: any) => {
   return {
     ...result,
     items: result.items.map(mapMessage),
+    typing: result.typing ?? [],
   };
 };
 
@@ -97,5 +98,15 @@ export const createChatController = (service: ReturnType<typeof createChatServic
       { upToMessageId: body.up_to_message_id, messageIds: body.message_ids ?? [] }
     );
     return c.json({ data: row }, 200);
+  },
+
+  postInternalTyping: async (c: Context<AppEnv>) => {
+    const res = await service.setTyping(actorFromContext(c), requiredParam(c, "projectId"), "internal");
+    return c.json({ data: res }, 200);
+  },
+
+  postExternalTyping: async (c: Context<AppEnv>) => {
+    const res = await service.setTyping(actorFromContext(c), requiredParam(c, "projectId"), "external");
+    return c.json({ data: res }, 200);
   },
 });

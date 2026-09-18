@@ -136,6 +136,12 @@
       "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/internal/read"
     },
     {
+      "endpoint": "/api/v1/collab/projects/{projectId}/chat/internal/typing",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/chat/internal/typing",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/internal/typing"
+    },
+    {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/external",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/external",
@@ -152,6 +158,12 @@
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/external/read",
       "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/external/read"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/chat/external/typing",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/chat/external/typing",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/chat/external/typing"
     },
     {
       "endpoint": "/api/v1/collab/notifications/unread",

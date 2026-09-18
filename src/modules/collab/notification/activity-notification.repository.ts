@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ne } from "drizzle-orm";
+import { and, count, desc, eq, ne, sql } from "drizzle-orm";
 import { projectActivityNotifications, projects } from "../../../db/schema";
 import type { NewProjectActivityNotification } from "../collab.types";
 import type { DbOrTx } from "../shared/db.types";
@@ -66,5 +66,23 @@ export const createActivityNotificationRepository = (conn: DbOrTx) => ({
       )
       .returning();
     return row ?? null;
+  },
+
+  markChatActivitiesSeenUpTo: async (
+    recipientSub: string,
+    projectId: string,
+    channel: "internal" | "external",
+    createdAt: Date,
+  ) => {
+    await conn.execute(sql`
+      UPDATE schema_collab.project_activity_notifications
+      SET is_seen = true, seen_at = NOW()
+      WHERE recipient_sub = ${recipientSub}::uuid
+        AND project_id = ${projectId}::uuid
+        AND channel = ${channel}::schema_collab.chat_channel
+        AND resource_type = 'chat_message'
+        AND is_seen = false
+        AND created_at <= ${createdAt}
+    `);
   },
 });
