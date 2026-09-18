@@ -72,7 +72,7 @@ export const createActivityNotificationRepository = (conn: DbOrTx) => ({
     recipientSub: string,
     projectId: string,
     channel: "internal" | "external",
-    createdAt: Date,
+    targetMessageId: string,
   ) => {
     await conn.execute(sql`
       UPDATE schema_collab.project_activity_notifications
@@ -82,7 +82,11 @@ export const createActivityNotificationRepository = (conn: DbOrTx) => ({
         AND channel = ${channel}::schema_collab.chat_channel
         AND resource_type = 'chat_message'
         AND is_seen = false
-        AND created_at <= ${createdAt}
+        AND created_at <= (
+          SELECT created_at
+          FROM schema_collab.project_chat_messages
+          WHERE id = ${targetMessageId}::uuid
+        )
     `);
   },
 });

@@ -83,7 +83,15 @@ describe("ChatService.listChatMessages", () => {
     expect(msg.readStatus.seenCount).toBe(1);
     expect(msg.readStatus.isSeen).toBe(false);
     expect(msg.readStatus.reads).toEqual([
-      { userSub: "reader-1", readAt: readDate.toISOString() },
+      {
+        userSub: "reader-1",
+        readAt: readDate.toISOString(),
+        firstName: null,
+        lastName: null,
+        role: "worker",
+        profession: null,
+        companyName: null,
+      },
     ]);
   });
 });

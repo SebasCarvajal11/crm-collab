@@ -1,7 +1,15 @@
 import type { ProjectMember } from "../member/member.repository";
 import type { UserProfileSnapshot } from "../../../shared/identity-snapshot-store";
 
-type ReadInfo = { userSub: string; readAt: string };
+type ReadInfo = {
+  userSub: string;
+  readAt: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string | null;
+  profession?: string | null;
+  companyName?: string | null;
+};
 
 type MessageInput = {
   id: string;

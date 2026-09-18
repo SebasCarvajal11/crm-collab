@@ -95,7 +95,7 @@ export const createChatRepository = (conn: DbOrTx) => ({
   markChatMessagesReadUpTo: async (
     projectId: string,
     channel: "internal" | "external" | "system",
-    createdAt: Date,
+    targetMessageId: string,
     userSub: string,
   ) => {
     await conn.execute(sql`
@@ -104,9 +104,13 @@ export const createChatRepository = (conn: DbOrTx) => ({
       FROM schema_collab.project_chat_messages
       WHERE project_id = ${projectId}::uuid
         AND channel = ${channel}::schema_collab.chat_channel
-        AND created_at <= ${createdAt}
+        AND created_at <= (
+          SELECT created_at
+          FROM schema_collab.project_chat_messages
+          WHERE id = ${targetMessageId}::uuid
+        )
       ON CONFLICT (message_id, user_sub)
-      DO UPDATE SET read_at = EXCLUDED.read_at
+      DO NOTHING
     `);
   },
 

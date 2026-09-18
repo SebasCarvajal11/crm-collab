@@ -57,28 +57,46 @@ export const createChatService = (
 
       const members = await memberRepository.listProjectMembers(projectId);
       const reads = await chatRepository.listChatReadsByMessages(messages.map((m) => m.id));
+      const authorSubs = messages.map((m) => m.authorSub).filter((s): s is string => Boolean(s));
+      const readerSubs = reads.map((r) => r.userSub);
+      const allSubs = [...new Set([...authorSubs, ...readerSubs])];
+      const { profiles } = allSubs.length > 0
+        ? await getUserProfilesFromSnapshots(allSubs)
+        : { profiles: new Map() };
+
+      const memberBySub = new Map(members.map((m) => [m.userSub, m]));
       const readersByMessage = new Map<string, Set<string>>();
-      const readsByMessage = new Map<string, Array<{ userSub: string; readAt: string }>>();
+      const readsByMessage = new Map<string, Array<{
+        userSub: string;
+        readAt: string;
+        firstName?: string | null;
+        lastName?: string | null;
+        role?: string | null;
+        profession?: string | null;
+        companyName?: string | null;
+      }>>();
+
       for (const read of reads) {
         if (!readersByMessage.has(read.messageId)) {
           readersByMessage.set(read.messageId, new Set());
           readsByMessage.set(read.messageId, []);
         }
         readersByMessage.get(read.messageId)!.add(read.userSub);
+        const p = profiles.get(read.userSub);
+        const m = memberBySub.get(read.userSub);
         readsByMessage.get(read.messageId)!.push({
           userSub: read.userSub,
           readAt: read.readAt.toISOString(),
+          firstName: p?.firstName ?? null,
+          lastName: p?.lastName ?? null,
+          role: m?.role ?? p?.role ?? null,
+          profession: p?.profession ?? null,
+          companyName: p?.companyName ?? null,
         });
       }
-      const memberBySub = new Map(members.map((m) => [m.userSub, m]));
       const visibleRecipients = channel === "internal"
         ? members.filter((candidate) => candidate.role !== "client")
         : members;
-
-      const authorSubs = [...new Set(messages.map((m) => m.authorSub).filter((sub): sub is string => Boolean(sub)))];
-      const { profiles } = authorSubs.length > 0
-        ? await getUserProfilesFromSnapshots(authorSubs)
-        : { profiles: new Map() };
 
       const mapperCtx = { readersByMessage, readsByMessage, memberBySub, visibleRecipients, profiles };
       const items = messages.map((msg) => mapChatMessageItem(msg, mapperCtx));
@@ -223,10 +241,10 @@ export const createChatService = (
           payload.upToMessageId
         );
         if (target) {
-          await chatRepository.markChatMessagesReadUpTo(projectId, channel, target.createdAt, actor.sub);
-          await notificationRepository.markMentionNotificationsSeenUpTo(actor.sub, projectId, channel, target.createdAt);
+          await chatRepository.markChatMessagesReadUpTo(projectId, channel, target.id, actor.sub);
+          await notificationRepository.markMentionNotificationsSeenUpTo(actor.sub, projectId, channel, target.id);
           if (activityRepository) {
-            await activityRepository.markChatActivitiesSeenUpTo(actor.sub, projectId, channel, target.createdAt);
+            await activityRepository.markChatActivitiesSeenUpTo(actor.sub, projectId, channel, target.id);
           }
           markedUpTo = true;
         }
@@ -257,7 +275,7 @@ export const createChatService = (
         await notificationRepository.markMentionNotificationsSeenByMessages(actor.sub, chunk);
       }
 
-      return { marked: uniqueIds.length };
+      return { marked: uniqueIds.length || (markedUpTo ? 1 : 0) };
     },
 
     setTyping: async (actor: Actor, projectId: string, channel: "internal" | "external") => {
