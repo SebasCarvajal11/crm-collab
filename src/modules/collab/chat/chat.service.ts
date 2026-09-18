@@ -54,11 +54,18 @@ export const createChatService = (
       const members = await memberRepository.listProjectMembers(projectId);
       const reads = await chatRepository.listChatReadsByMessages(messages.map((m) => m.id));
       const readersByMessage = new Map<string, Set<string>>();
+      const readsByMessage = new Map<string, Array<{ userSub: string; readAt: string }>>();
       for (const read of reads) {
-        if (!readersByMessage.has(read.messageId)) readersByMessage.set(read.messageId, new Set());
+        if (!readersByMessage.has(read.messageId)) {
+          readersByMessage.set(read.messageId, new Set());
+          readsByMessage.set(read.messageId, []);
+        }
         readersByMessage.get(read.messageId)!.add(read.userSub);
+        readsByMessage.get(read.messageId)!.push({
+          userSub: read.userSub,
+          readAt: read.readAt.toISOString(),
+        });
       }
-      const memberSubs = new Set(members.map((m) => m.userSub));
       const memberBySub = new Map(members.map((m) => [m.userSub, m]));
       const visibleRecipients = channel === "internal"
         ? members.filter((candidate) => candidate.role !== "client")
@@ -71,12 +78,11 @@ export const createChatService = (
 
       const items = messages.map((msg) => {
         const readers = readersByMessage.get(msg.id) ?? new Set<string>();
-        const mentioned = ((msg.mentionedSubs ?? []) as string[]).filter((sub) => memberSubs.has(sub));
+        const msgReads = readsByMessage.get(msg.id) ?? [];
         const authorMember = msg.authorSub ? memberBySub.get(msg.authorSub) : undefined;
-        const required =
-          mentioned.length > 0
-            ? mentioned.filter((sub) => sub !== msg.authorSub)
-            : visibleRecipients.map((m) => m.userSub).filter((sub) => sub !== msg.authorSub);
+        const required = visibleRecipients
+          .map((m) => m.userSub)
+          .filter((sub) => sub !== msg.authorSub);
         const seenCount = required.filter((sub) => readers.has(sub)).length;
         const isSeen = required.length === 0 ? true : seenCount === required.length;
         const profile = msg.authorSub ? profiles.get(msg.authorSub) : undefined;
@@ -90,6 +96,7 @@ export const createChatService = (
             isSeen,
             requiredCount: required.length,
             seenCount,
+            reads: msgReads,
           },
         };
       });
@@ -191,6 +198,10 @@ export const createChatService = (
 
       const { profiles } = await getUserProfilesFromSnapshots([actor.sub]);
       const profile = profiles.get(actor.sub);
+      const visibleRecipients = channel === "internal"
+        ? projectMembers.filter((candidate) => candidate.role !== "client")
+        : projectMembers;
+      const requiredCount = visibleRecipients.filter((m) => m.userSub !== actor.sub).length;
 
       return {
         ...row,
@@ -200,9 +211,10 @@ export const createChatService = (
         authorProfession: profile?.profession ?? null,
         mentionedSubs: mentionSubs.length > 0 ? mentionSubs : null,
         readStatus: {
-          isSeen: true,
-          requiredCount: 0,
+          isSeen: requiredCount === 0,
+          requiredCount,
           seenCount: 0,
+          reads: [],
         },
       };
     },
