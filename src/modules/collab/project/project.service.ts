@@ -317,25 +317,26 @@ export const createProjectService = (
         boardRepository.listTaskCountsByAssigneeByProject(projectId, isClient ? true : undefined),
       ]);
 
-      const { assigneeEmailBySub } = buildMemberAssignmentMaps(assignees, []);
-      const taskCountBySub = buildTaskCountMap(taskCounts);
-
-      const lightweightMembers = members.map((member) => ({
-        ...member,
-        email: member.userEmail ?? assigneeEmailBySub.get(member.userSub) ?? null,
-        taskCount: taskCountBySub.get(member.userSub) ?? 0,
-        first_name: null,
-        last_name: null,
-        client_kind: null,
-        company_name: null,
-        profession: null,
-      }));
+      const enrichedMembers = await enrichProjectMembersWithProfiles(
+        {
+          listProjectMembers: memberRepository.listProjectMembers,
+          findProjectById: projectRepository.findProjectById,
+          findProjectMember: memberRepository.findProjectMember,
+          listTasksByProject: boardRepository.listTasksByProject,
+          listTaskAssigneesByProject: boardRepository.listTaskAssigneesByProject,
+        } as any,
+        members,
+        actor,
+        assignees,
+        tasks.rows,
+        taskCounts
+      );
 
       const tasksTruncated = tasks.total > PROJECT_BOARD_TASK_LIMIT;
 
       return {
         project,
-        members: lightweightMembers,
+        members: enrichedMembers,
         board: {
           columns,
           tasks: tasks.rows,
