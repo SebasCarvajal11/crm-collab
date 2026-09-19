@@ -311,6 +311,34 @@ export const SignProjectContractSchema = z.object({
   signature_data_url: z.string().regex(/^data:image\/png;base64,/, "La firma debe ser una imagen PNG").max(400_000),
   accept_terms: z.literal(true),
 });
+
+export const AmendmentIdParamSchema = z.object({
+  projectId: z.string().uuid(),
+  amendmentId: z.string().uuid(),
+});
+
+export const CreateAmendmentDraftSchema = z.object({
+  title: z.string().trim().min(3).max(255),
+  amendment_type: z.enum(["services", "economic", "extension", "mixed"]).default("services"),
+  service_scope: z.string().trim().min(5).max(10_000),
+  additional_fee: z.number().int().min(0).default(0),
+  fee_payment_type: z.enum(["one_time", "monthly_recurring"]).default("one_time"),
+  term_months_extension: z.number().int().min(0).max(120).default(0),
+  additional_terms: z.string().trim().max(5000).optional().nullable(),
+  signature_city: z.string().trim().min(2).max(120).default("Bogotá, D.C."),
+  client_request_notes: z.string().trim().max(2000).optional().nullable(),
+});
+
+export const RequestClientAmendmentSchema = z.object({
+  title: z.string().trim().min(3).max(255),
+  description: z.string().trim().min(5).max(3000),
+});
+
+export const SignAmendmentSchema = z.object({
+  signer_name: z.string().trim().min(2).max(200),
+  signature_data_url: z.string().regex(/^data:image\/png;base64,/, "La firma debe ser una imagen PNG").max(400_000),
+  accept_terms: z.literal(true),
+});
 export const CreateMinorChangeRequestSchema = z.object({
   task_id: z.string().uuid().optional(),
   title: z.string().min(3).max(200).optional(),
@@ -364,3 +392,6 @@ export type CreateFormalChangeRequestBody = z.infer<typeof CreateFormalChangeReq
 export type ResolveChangeRequestBody = z.infer<typeof ResolveChangeRequestSchema>;
 export type CreateTaskCommentBody = z.infer<typeof CreateTaskCommentSchema>;
 export type GenerateUploadUrlBody = z.infer<typeof GenerateUploadUrlSchema>;
+export type CreateAmendmentDraftBody = z.infer<typeof CreateAmendmentDraftSchema>;
+export type RequestClientAmendmentBody = z.infer<typeof RequestClientAmendmentSchema>;
+export type SignAmendmentBody = z.infer<typeof SignAmendmentSchema>;

@@ -10,7 +10,7 @@ import { createBriefRepository } from "../brief/brief.repository";
 import { createAuditRepository } from "../repository/audit.repository";
 import { PROJECT_BOARD_TASK_LIMIT } from "../shared/constants";
 import { assertProjectAccess, assertProjectMemberRoleCompatibility } from "../shared/project-access";
-import { buildMemberAssignmentMaps, buildTaskCountMap, enrichProjectMembersWithProfiles } from "../shared/mappers";
+import { enrichProjectMembersWithProfiles } from "../shared/mappers";
 import { canManageProject } from "../shared/guards";
 
 type Actor = {

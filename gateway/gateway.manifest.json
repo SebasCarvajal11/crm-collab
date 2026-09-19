@@ -369,6 +369,36 @@
         "status"
       ],
       "openapi_ref": "GET /api/v1/collab/projects/{projectId}/change-requests"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/amendments",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/amendments",
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/contract/amendments"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/amendments",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/amendments",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/amendments"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/amendments/request",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/amendments/request",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/amendments/request"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/request-signature",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/request-signature",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/request-signature"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/sign",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/sign",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/sign"
     }
   ]
 }

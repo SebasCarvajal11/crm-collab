@@ -1,5 +1,5 @@
-import type { ProjectMember } from "../member/member.repository";
-import type { UserProfileSnapshot } from "../../../shared/identity-snapshot-store";
+import type { ProjectMember } from "../collab.types";
+import type { UserProfile } from "../../../shared/identity-snapshot-store";
 
 type ReadInfo = {
   userSub: string;
@@ -27,7 +27,7 @@ type MapperContext = {
   readsByMessage: Map<string, ReadInfo[]>;
   memberBySub: Map<string, ProjectMember>;
   visibleRecipients: ProjectMember[];
-  profiles: Map<string, UserProfileSnapshot>;
+  profiles: Map<string, UserProfile>;
 };
 
 export function mapChatMessageItem(msg: MessageInput, ctx: MapperContext) {

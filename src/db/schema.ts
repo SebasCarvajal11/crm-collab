@@ -95,6 +95,16 @@ export const fileFolderEnum = collabSchema.enum("file_folder", [
 export const contractStatusEnum = collabSchema.enum("contract_status", ["draft", "pending_signature", "signed"]);
 export const contractProviderKindEnum = collabSchema.enum("contract_provider_kind", ["cima", "independent"]);
 export const contractClientKindEnum = collabSchema.enum("contract_client_kind", ["natural", "juridical"]);
+export const amendmentTypeEnum = collabSchema.enum("amendment_type", [
+  "services",
+  "economic",
+  "extension",
+  "mixed",
+]);
+export const amendmentFeePaymentTypeEnum = collabSchema.enum("amendment_fee_payment_type", [
+  "one_time",
+  "monthly_recurring",
+]);
 
 export const projects = collabSchema.table(
   "projects",
@@ -506,6 +516,49 @@ export const projectContracts = collabSchema.table(
   (t) => [
     uniqueIndex("uq_project_contracts_project_id").on(t.projectId),
     index("idx_project_contracts_status").on(t.status),
+  ]
+);
+
+export const projectContractAmendments = collabSchema.table(
+  "project_contract_amendments",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    contractId: uuid("contract_id")
+      .notNull()
+      .references(() => projectContracts.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    amendmentNumber: integer("amendment_number").notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    amendmentType: amendmentTypeEnum("amendment_type").default("services").notNull(),
+    status: contractStatusEnum("status").default("draft").notNull(),
+    serviceScope: text("service_scope").notNull(),
+    additionalFee: integer("additional_fee").default(0).notNull(),
+    feePaymentType: amendmentFeePaymentTypeEnum("fee_payment_type").default("one_time").notNull(),
+    termMonthsExtension: integer("term_months_extension").default(0).notNull(),
+    additionalTerms: text("additional_terms"),
+    clientRequestNotes: text("client_request_notes"),
+    contentSnapshot: text("content_snapshot"),
+    contentHash: varchar("content_hash", { length: 64 }),
+    preparedBySub: uuid("prepared_by_sub").notNull(),
+    requestedSignatureAt: timestamp("requested_signature_at", { mode: "date" }),
+    signedAt: timestamp("signed_at", { mode: "date" }),
+    signedBySub: uuid("signed_by_sub"),
+    signerName: varchar("signer_name", { length: 200 }),
+    signatureDataUrl: text("signature_data_url"),
+    consentAcceptedAt: timestamp("consent_accepted_at", { mode: "date" }),
+    signedIpAddress: varchar("signed_ip_address", { length: 45 }),
+    signedUserAgent: varchar("signed_user_agent", { length: 500 }),
+    signatureCity: varchar("signature_city", { length: 120 }).default("Bogotá, D.C.").notNull(),
+    createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_project_amendment_number").on(t.contractId, t.amendmentNumber),
+    index("idx_project_amendments_contract_id").on(t.contractId),
+    index("idx_project_amendments_project_id").on(t.projectId),
+    index("idx_project_amendments_status").on(t.status),
   ]
 );
 
