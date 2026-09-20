@@ -486,6 +486,48 @@ components:
           type: string
           format: date-time
 
+    ProjectContractAmendment:
+      type: object
+      required: [id, projectId, title, amendmentType, status, serviceScope, additionalFee, feePaymentType, termMonthsExtension, signatureCity, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        amendmentType:
+          type: string
+          enum: [services, economic, extension, mixed]
+        status:
+          type: string
+          enum: [draft, requested_by_client, pending_signature, signed, rejected]
+        serviceScope:
+          type: string
+        additionalFee:
+          type: integer
+        feePaymentType:
+          type: string
+          enum: [one_time, monthly_recurring]
+        termMonthsExtension:
+          type: integer
+        additionalTerms:
+          type: string
+          nullable: true
+        signatureCity:
+          type: string
+        clientRequestNotes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
 security:
   - BearerAuth: []
 
@@ -1760,6 +1802,152 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/ProjectContract' }
 
+  /api/v1/collab/projects/{projectId}/contract/amendments:
+    get:
+      summary: Listar otrosíes y adiciones contractuales del proyecto
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista de otrosíes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectContractAmendment'
+    post:
+      summary: Crear borrador de otrosí contractual
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, service_scope]
+              properties:
+                title: { type: string }
+                amendment_type: { type: string, enum: [services, economic, extension, mixed] }
+                service_scope: { type: string }
+                additional_fee: { type: integer }
+                fee_payment_type: { type: string, enum: [one_time, monthly_recurring] }
+                term_months_extension: { type: integer }
+                additional_terms: { type: string, nullable: true }
+                signature_city: { type: string }
+                client_request_notes: { type: string, nullable: true }
+      responses:
+        '200':
+          description: Borrador de otrosí creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectContractAmendment'
+
+  /api/v1/collab/projects/{projectId}/contract/amendments/request:
+    post:
+      summary: Solicitar formalmente un otrosí como cliente
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title: { type: string }
+                description: { type: string }
+      responses:
+        '200':
+          description: Solicitud de otrosí registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectContractAmendment'
+
+  /api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/request-signature:
+    post:
+      summary: Solicitar firma de otrosí al cliente
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: amendmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Otrosí listo para firma
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectContractAmendment'
+
+  /api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/sign:
+    post:
+      summary: Firmar digitalmente otrosí contractual
+      tags: [Contracts]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: amendmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signer_name, signature_data_url, accept_terms]
+              properties:
+                signer_name: { type: string }
+                signature_data_url: { type: string }
+                accept_terms: { type: boolean, enum: [true] }
+      responses:
+        '200':
+          description: Otrosí firmado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProjectContractAmendment'
+
   /api/v1/collab/projects/search:
     get:
       summary: Buscar proyectos del usuario
@@ -1826,6 +2014,52 @@ paths:
       responses:
         '200':
           description: Leído
+
+  /api/v1/collab/projects/{projectId}/chat/internal/typing:
+    post:
+      summary: Notificar tipeo en chat interno
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Indicador registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /api/v1/collab/projects/{projectId}/chat/external/typing:
+    post:
+      summary: Notificar tipeo en chat externo
+      tags:
+        - Chat
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Indicador registrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
 
   /api/v1/collab/notifications/unread:
     get:
