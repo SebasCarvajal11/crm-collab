@@ -14,108 +14,22 @@ import {
 
 const logger = getLogger();
 
-export type MediaCommandActor = {
-  sub: string;
-  userId: string;
-  role: string;
-  email: string;
+import {
+  type MediaCommandActor,
+  type UnsignedMediaCommandRequest,
+  type MediaCommandRequest,
+  type MediaCommandResponse,
+  type PendingResponse,
+} from "./media-command.types";
+import { SimpleCircuitBreaker, mediaCircuitBreaker } from "./circuit-breaker";
+
+export type {
+  MediaCommandActor,
+  UnsignedMediaCommandRequest,
+  MediaCommandRequest,
+  MediaCommandResponse,
 };
-
-type UnsignedMediaCommandRequest =
-  | {
-      type: "file.upload-url-requested";
-      traceId?: string;
-      correlationId: string;
-      requestedAt: string;
-      actor: MediaCommandActor;
-      objectKey: string;
-      fileName: string;
-      mimeType: string;
-      sizeBytes: number;
-    }
-  | {
-      type: "file.metadata-requested";
-      traceId?: string;
-      correlationId: string;
-      requestedAt: string;
-      actor: MediaCommandActor;
-      objectKey: string;
-      fileName: string;
-      mimeType: string;
-      sizeBytes: number;
-    }
-  | {
-      type: "file.access-requested";
-      traceId?: string;
-      correlationId: string;
-      requestedAt: string;
-      actor: MediaCommandActor;
-      objectKey: string;
-      forceDownload: boolean;
-    }
-  | {
-      type: "file.delete-requested";
-      traceId?: string;
-      correlationId: string;
-      requestedAt: string;
-      actor: MediaCommandActor;
-      objectKey: string;
-    };
-
-type MediaCommandRequest = UnsignedMediaCommandRequest & {
-  signature: string;
-};
-
-type MediaCommandResponse =
-  | {
-      type: "file.upload-url-created";
-      version: number;
-      contractVersion: number;
-      correlationId: string;
-      objectKey: string;
-      uploadUrl: string;
-      expiresInSeconds: number;
-    }
-  | {
-      type: "file.metadata-resolved";
-      version: number;
-      contractVersion: number;
-      correlationId: string;
-      objectKey: string;
-      sizeBytes: number;
-      mimeType: string;
-    }
-  | {
-      type: "file.access-granted";
-      version: number;
-      contractVersion: number;
-      correlationId: string;
-      objectKey: string;
-      url: string;
-      expiresInSeconds: number;
-    }
-  | {
-      type: "file.deleted";
-      version: number;
-      contractVersion: number;
-      correlationId: string;
-      objectKey: string;
-    }
-  | {
-      type: "file.command-failed";
-      version: number;
-      contractVersion: number;
-      correlationId: string;
-      objectKey?: string;
-      statusCode: number;
-      message: string;
-    };
-
-type PendingResponse = {
-  resolve: (response: MediaCommandResponse) => void;
-  reject: (error: Error) => void;
-  timer: NodeJS.Timeout;
-};
+export { SimpleCircuitBreaker, mediaCircuitBreaker };
 
 const pendingResponses = new Map<string, PendingResponse>();
 let responseLoopStarted = false;
@@ -474,87 +388,3 @@ function commandFailureToAppError(response: MediaCommandResponse): AppError {
   return new AppError(response.statusCode, response.message);
 }
 
-// ── Circuit Breaker ──────────────────────────────────────────────────────────
-
-export class SimpleCircuitBreaker {
-  private state: "CLOSED" | "OPEN" | "HALF_OPEN" = "CLOSED";
-  private failures: number[] = [];
-  private successes: number[] = [];
-  private lastStateChange: number = Date.now();
-
-  constructor(
-    private thresholdRate = 0.5,
-    private windowMs = 60000,
-    private cooldownMs = 10000,
-    private minRequests = 5,
-  ) {}
-
-  public getState() {
-    return this.state;
-  }
-
-  public getCooldownMs() {
-    return this.cooldownMs;
-  }
-
-
-  public checkCall(): boolean {
-    const now = Date.now();
-    this.cleanOldMetrics(now);
-
-    if (this.state === "OPEN") {
-      if (now - this.lastStateChange >= this.cooldownMs) {
-        this.transitionTo("HALF_OPEN", now);
-        return true;
-      }
-      return false;
-    }
-    return true;
-  }
-
-  public recordSuccess(): void {
-    const now = Date.now();
-    if (this.state === "HALF_OPEN") {
-      this.transitionTo("CLOSED", now);
-      this.failures = [];
-      this.successes = [];
-    } else if (this.state === "CLOSED") {
-      this.successes.push(now);
-    }
-  }
-
-  public recordFailure(): void {
-    const now = Date.now();
-    if (this.state === "HALF_OPEN" || this.state === "CLOSED") {
-      this.failures.push(now);
-      this.checkFailureRate(now);
-    }
-  }
-
-  private transitionTo(newState: "CLOSED" | "OPEN" | "HALF_OPEN", now: number) {
-    logger.warn({ from: this.state, to: newState, topic: "circuit-breaker" }, `Circuit breaker state transition`);
-    this.state = newState;
-    this.lastStateChange = now;
-  }
-
-  private cleanOldMetrics(now: number) {
-    const limit = now - this.windowMs;
-    this.failures = this.failures.filter((t) => t > limit);
-    this.successes = this.successes.filter((t) => t > limit);
-  }
-
-  private checkFailureRate(now: number) {
-    this.cleanOldMetrics(now);
-    const total = this.failures.length + this.successes.length;
-    if (this.state === "HALF_OPEN") {
-      this.transitionTo("OPEN", now);
-    } else if (this.state === "CLOSED" && total >= this.minRequests) {
-      const rate = this.failures.length / total;
-      if (rate >= this.thresholdRate) {
-        this.transitionTo("OPEN", now);
-      }
-    }
-  }
-}
-
-export const mediaCircuitBreaker = new SimpleCircuitBreaker();

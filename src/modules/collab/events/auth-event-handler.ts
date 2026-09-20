@@ -23,7 +23,7 @@ import {
 } from "@sebascarvajal11/cima-contracts/event-consumer";
 import { appendAuthEventToDlq } from "./auth-events-dlq";
 import { getLogger, traceStorage } from "../../../shared/logger";
-import { SimpleCircuitBreaker } from "../../../shared/media-command-client";
+import { SimpleCircuitBreaker } from "../../../shared/circuit-breaker";
 
 const logger = getLogger();
 

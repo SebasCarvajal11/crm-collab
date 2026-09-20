@@ -487,7 +487,7 @@ Modernizar la imagen de marca para atraer público más joven sin perder la eleg
 ];
 
 async function seed() {
-  console.log("🌱 Iniciando seed de mod-collab...\n");
+  console.log("🌱 Iniciando seed de crm-collab...\n");
 
   const [adminSnapshot] = await db
     .select({

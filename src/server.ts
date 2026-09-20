@@ -21,15 +21,15 @@ const { createApp } = await import("./app");
 
 // Initialize event system
 await setupDefaultEventHandlers();
-logger.info("[mod-collab] Event system initialized");
+logger.info("[crm-collab] Event system initialized");
 
 // Initialize auth identity consumer (best-effort; survives without Redis)
 void startAuthEventConsumer().catch((err) =>
-  logger.error({ err }, "[mod-collab] Auth event consumer failed to start")
+  logger.error({ err }, "[crm-collab] Auth event consumer failed to start")
 );
 startAuthDlqReplayer();
 void startMediaResponseConsumer().catch((err) =>
-  logger.error({ err }, "[mod-collab] Media response consumer failed to start")
+  logger.error({ err }, "[crm-collab] Media response consumer failed to start")
 );
 
 const app = createApp();
@@ -40,7 +40,7 @@ let isShuttingDown = false;
 const shutdown = async (signal: string) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
-  logger.info({ signal }, "[shutdown] cerrando recursos de mod-collab");
+  logger.info({ signal }, "[shutdown] cerrando recursos de crm-collab");
 
   if (serverRef) {
     await new Promise<void>((resolve, reject) => {
@@ -56,7 +56,7 @@ const shutdown = async (signal: string) => {
   await stopMediaResponseConsumer().catch((err) => logger.error({ err }, "[shutdown] mediaResponseConsumer.stop"));
   await closeRedisConnections();
   await pool.end().catch((err) => logger.error({ err }, "[shutdown] pool.end"));
-  logger.info("[shutdown] mod-collab finalizado");
+  logger.info("[shutdown] crm-collab finalizado");
 };
 
 const exitAfterShutdown = (signal: string) => {

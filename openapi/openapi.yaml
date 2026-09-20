@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: mod-collab - Módulo de Colaboración y Gestión de Proyectos
+  title: crm-collab - Módulo de Colaboración y Gestión de Proyectos
   version: 1.0.0
   description: |
     Microservicio de colaboración Kanban para gestión de proyectos de marketing y productos.
@@ -10,7 +10,7 @@ info:
 servers:
   - url: http://localhost:3001
     description: Desarrollo local
-  - url: http://localhost:8080/collab
+  - url: http://localhost:28080/collab
     description: A través de API Gateway (KrakenD)
 
 components:
@@ -551,11 +551,11 @@ paths:
                     example: "ok"
                   service:
                     type: string
-                    example: "mod-collab"
+                    example: "crm-collab"
 
   /api/v1/.well-known/service-jwks.json:
     get:
-      summary: JWKS (clave pública RS256 de mod-collab para verificación de firmas de servicio a servicio)
+      summary: JWKS (clave pública RS256 de crm-collab para verificación de firmas de servicio a servicio)
       tags:
         - System
       security: []

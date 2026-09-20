@@ -28,10 +28,6 @@ const envSchema = z
       .default("false")
       .transform((v) => v === "true"),
     CORS_ORIGIN: z.string().default("http://localhost:5173"),
-    TRUST_GATEWAY_JWT_HEADERS: z
-      .union([z.literal("true"), z.literal("false"), z.literal("1"), z.literal("0")])
-      .default("false")
-      .transform((v) => v === "true" || v === "1"),
     SERVICE_JWT_PRIVATE_KEY: pemFromEnv.refine(
       (pem) => pem.includes("BEGIN PRIVATE KEY"),
       "SERVICE_JWT_PRIVATE_KEY debe ser PKCS#8 PEM (BEGIN PRIVATE KEY)"
@@ -88,15 +84,10 @@ const envSchema = z
     RATE_LIMIT_COLLAB_DEFAULT_WINDOW_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
   })
   .superRefine((data, ctx) => {
-    if (
-      !data.TRUST_GATEWAY_JWT_HEADERS &&
-      !data.JWT_PUBLIC_KEY &&
-      !data.JWKS_URI
-    ) {
+    if (!data.JWT_PUBLIC_KEY && !data.JWKS_URI) {
       ctx.addIssue({
         code: "custom",
-        message:
-          "JWT_PUBLIC_KEY o JWKS_URI es requerida cuando TRUST_GATEWAY_JWT_HEADERS=false",
+        message: "JWT_PUBLIC_KEY o JWKS_URI es requerida para la verificación de tokens",
         path: ["JWT_PUBLIC_KEY"],
       });
     }
@@ -105,7 +96,7 @@ const envSchema = z
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  logger.error({ fieldErrors: parsed.error.flatten().fieldErrors }, "Variables de entorno invalidas en mod-collab");
+  logger.error({ fieldErrors: parsed.error.flatten().fieldErrors }, "Variables de entorno invalidas en crm-collab");
   process.exit(1);
 }
 

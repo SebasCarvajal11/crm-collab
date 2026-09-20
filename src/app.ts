@@ -24,7 +24,7 @@ import { requestLoggerMiddleware } from "./shared/middlewares/request-logger.mid
 import { listAuthEventDlqEntries, replayAuthEventDlqEntry } from "./modules/collab/events/auth-events-dlq";
 import { getServiceJwksDocument } from "./config/jwt";
 
-const logger = initLogger("mod-collab");
+const logger = initLogger("crm-collab");
 const healthStartTime = Date.now();
 
 /** Instancia de métricas compartida con los workers de este proceso. */
