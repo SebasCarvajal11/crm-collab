@@ -106,6 +106,13 @@
       "when": 1790050000000,
       "tag": "0014_fix_subtasks_progress_consistency",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790080000000,
+      "tag": "0015_add_file_purged_fields",
+      "breakpoints": true
     }
   ]
 }

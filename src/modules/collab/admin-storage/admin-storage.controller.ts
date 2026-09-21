@@ -17,8 +17,13 @@ const service = createAdminStorageService(repo);
 
 export const adminStorageController = {
   getStorageTree: async (c: Context<AppEnv>) => {
-    const data = await service.getStorageTree();
-    return c.json({ data }, 200);
+    try {
+      const data = await service.getStorageTree();
+      return c.json({ data }, 200);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: msg }, 500);
+    }
   },
 
   purgeFile: async (c: Context<AppEnv>) => {
