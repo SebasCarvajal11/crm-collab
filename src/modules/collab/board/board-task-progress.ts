@@ -18,6 +18,8 @@ export function resolveTaskProgressAndCompletion(params: TaskProgressParams) {
 
   if (isFinal && !hasSubtasks) {
     calculatedProgress = 100;
+  } else if (!isFinal && !hasSubtasks && calculatedProgress === 100) {
+    calculatedProgress = 0;
   }
 
   if (isFinal && hasSubtasks && calculatedProgress < 100) {

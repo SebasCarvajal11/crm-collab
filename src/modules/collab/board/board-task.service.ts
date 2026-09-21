@@ -174,6 +174,10 @@ export const createBoardTaskService = (
         throw new ForbiddenError("No tienes permisos para bloquear esta tarea");
       }
 
+      if (patch.blockedByTaskId && patch.blockedByTaskId === taskId) {
+        throw new BadRequestError("Una tarea no puede bloquearse a si misma");
+      }
+
       return db.transaction(async (tx) => {
         const txBoardRepository = createBoardRepository(tx);
         const txProjectRepository = createProjectRepository(tx);
@@ -185,8 +189,8 @@ export const createBoardTaskService = (
 
         const blockingPatch = isMovingToBlocked
           ? {
-              blockReason: patch.blockReason ?? "Impedimento interno",
-              blockType: "internal_impediment" as const,
+              blockReason: patch.blockReason?.trim() || "Impedimento interno",
+              blockType: patch.blockType ?? "internal_impediment" as const,
               blockedAt: new Date(),
               blockedBySub: actor.sub,
             }

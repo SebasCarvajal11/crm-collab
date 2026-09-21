@@ -99,6 +99,13 @@
       "when": 1790000000000,
       "tag": "0013_standardize_board_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790050000000,
+      "tag": "0014_fix_subtasks_progress_consistency",
+      "breakpoints": true
     }
   ]
 }

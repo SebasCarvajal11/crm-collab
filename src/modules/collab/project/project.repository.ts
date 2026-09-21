@@ -48,13 +48,15 @@ export const createProjectRepository = (conn: DbOrTx) => ({
           COUNT(t.id) FILTER (WHERE c.key = 'client_approval')::int AS review_count,
           COUNT(t.id) FILTER (WHERE c.key <> 'pending')::int AS non_pending_count,
           COALESCE(ROUND(AVG(
-            CASE c.key
-              WHEN 'pending' THEN 0
-              WHEN 'doing' THEN 25
-              WHEN 'internal_review' THEN 50
-              WHEN 'client_approval' THEN 75
-              WHEN 'blocked' THEN 10
-              WHEN 'done' THEN 100
+            CASE
+              WHEN (SELECT COUNT(s.id) FROM schema_collab.project_subtasks s WHERE s.task_id = t.id) > 0
+                THEN t.checklist_progress
+              WHEN c.key = 'pending' THEN 0
+              WHEN c.key = 'doing' THEN 25
+              WHEN c.key = 'internal_review' THEN 50
+              WHEN c.key = 'client_approval' THEN 75
+              WHEN c.key = 'blocked' THEN 10
+              WHEN c.key = 'done' THEN 100
               ELSE 0
             END
           ))::int, 0) AS progress_avg
