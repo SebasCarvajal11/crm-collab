@@ -10,6 +10,8 @@ import type {
   ProjectTasksQuery,
   CreateTaskCommentBody,
   CreateTaskFileMetadataBody,
+  BlockTaskBody,
+  UnblockTaskBody,
 } from "../collab.schemas";
 import type { createBoardService } from "./board.service";
 
@@ -128,6 +130,31 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
         clientVisible: body.client_visible,
         position: body.position,
         subtasks: mapSubtasks(body.subtasks),
+      },
+      { ipAddress: getIp(c), userAgent: getUa(c) }
+    );
+    return c.json({ data: row }, 200);
+  },
+
+  blockTask: async (c: Context<AppEnv>) => {
+    const body = validatedJson<BlockTaskBody>(c);
+    const row = await service.blockTask(
+      actorFromContext(c),
+      requiredParam(c, "taskId"),
+      { reason: body.reason },
+      { ipAddress: getIp(c), userAgent: getUa(c) }
+    );
+    return c.json({ data: row }, 200);
+  },
+
+  unblockTask: async (c: Context<AppEnv>) => {
+    const body = validatedJson<UnblockTaskBody>(c);
+    const row = await service.unblockTask(
+      actorFromContext(c),
+      requiredParam(c, "taskId"),
+      {
+        targetColumnId: body.target_column_id,
+        resolutionComment: body.resolution_comment,
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );

@@ -118,6 +118,18 @@
       "openapi_ref": "PATCH /api/v1/collab/tasks/{taskId}"
     },
     {
+      "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/block",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/block",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/tasks/{taskId}/block"
+    },
+    {
+      "endpoint": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/unblock",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/projects/{projectId}/tasks/{taskId}/unblock",
+      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/tasks/{taskId}/unblock"
+    },
+    {
       "endpoint": "/api/v1/collab/projects/{projectId}/chat/internal",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/chat/internal",

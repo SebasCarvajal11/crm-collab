@@ -1,16 +1,16 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../../shared/middlewares/error-handler.middleware";
 import { collabEvents } from "../events";
-import { ProjectTask } from "../domain/project-aggregate";
 import { syncProjectSummary } from "../application/project-summary-sync";
-import { canMoveTasks } from "../shared/guards";
+import { canMoveTasks, canBlockTask, canUnblockTask } from "../shared/guards";
 import { assertProjectAccess, assertWorkerOnlyAssignments } from "../shared/project-access";
 import { resolveAssigneeEmails } from "../shared/mappers";
+import { resolveTaskProgressAndCompletion } from "./board-task-progress";
 import { createAuditRepository } from "../repository/audit.repository";
 import { createBoardRepository } from "./board.repository";
 import { createProjectRepository } from "../project/project.repository";
 import { createMemberRepository } from "../member/member.repository";
 import { db } from "../../../db/connection";
-import type { Actor, RequestMeta } from "./board.types";
+import type { Actor, CreateTaskInput, RequestMeta, UpdateTaskInput } from "./board.types";
 
 export const createBoardTaskService = (
   boardRepository: ReturnType<typeof createBoardRepository>,
@@ -27,19 +27,7 @@ export const createBoardTaskService = (
     createTask: async (
       actor: Actor,
       projectId: string,
-      payload: {
-        columnId: string;
-        title: string;
-        description?: string;
-        priority: "low" | "medium" | "high" | "urgent";
-        assignees?: { userSub: string; userEmail?: string }[];
-        dueDate?: Date | null;
-        checklistProgress: number;
-        blockedByTaskId?: string | null;
-        clientVisible: boolean;
-        position: number;
-        subtasks?: { id?: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[];
-      },
+      payload: CreateTaskInput,
       meta: RequestMeta,
     ) => {
       const { member } = await assertProjectAccess(accessRepo, actor, projectId);
@@ -52,15 +40,11 @@ export const createBoardTaskService = (
       });
       const primaryAssigneeSub = payload.assignees?.[0]?.userSub ?? null;
 
-      const hasSubtasks = payload.subtasks && payload.subtasks.length > 0;
-      let calculatedProgress = hasSubtasks
-        ? ProjectTask.calculateChecklistProgress(payload.subtasks)
-        : (payload.checklistProgress ?? 0);
-
-      if (ProjectTask.isFinalizationColumn(column.key) && !hasSubtasks) {
-        calculatedProgress = 100;
-      }
-      const completedAt = ProjectTask.isCompleted(column.key, calculatedProgress) ? new Date() : null;
+      const { calculatedProgress, completedAt } = resolveTaskProgressAndCompletion({
+        columnKey: column.key,
+        subtasks: payload.subtasks,
+        checklistProgress: payload.checklistProgress,
+      });
 
       return db.transaction(async (tx) => {
         const txBoardRepository = createBoardRepository(tx);
@@ -135,19 +119,7 @@ export const createBoardTaskService = (
     updateTask: async (
       actor: Actor,
       taskId: string,
-      patch: {
-        columnId?: string;
-        title?: string;
-        description?: string | null;
-        priority?: "low" | "medium" | "high" | "urgent";
-        assignees?: { userSub: string; userEmail?: string }[];
-        dueDate?: Date | null;
-        checklistProgress?: number;
-        blockedByTaskId?: string | null;
-        clientVisible?: boolean;
-        position?: number;
-        subtasks?: { id?: string; title: string; isCompleted: boolean; assigneeSub?: string | null }[];
-      },
+      patch: UpdateTaskInput,
       meta: RequestMeta,
     ) => {
       const task = await boardRepository.findTaskById(taskId);
@@ -178,33 +150,52 @@ export const createBoardTaskService = (
         throw new BadRequestError("Columna destino invalida");
       }
 
-      const subtasksForProgress = patch.subtasks !== undefined ? patch.subtasks : task.subtasks;
-      const hasSubtasks = subtasksForProgress && subtasksForProgress.length > 0;
-      let calculatedProgress = hasSubtasks
-        ? ProjectTask.calculateChecklistProgress(subtasksForProgress)
-        : (patch.checklistProgress !== undefined ? patch.checklistProgress : task.checklistProgress);
+      const { calculatedProgress, completedAt } = resolveTaskProgressAndCompletion({
+        columnKey: targetColumn.key,
+        subtasks: patch.subtasks !== undefined ? patch.subtasks : task.subtasks,
+        checklistProgress: patch.checklistProgress !== undefined ? patch.checklistProgress : task.checklistProgress,
+        existingCompletedAt: task.completedAt,
+      });
 
-      if (ProjectTask.isFinalizationColumn(targetColumn.key) && !hasSubtasks) {
-        calculatedProgress = 100;
+      const isMovingFromBlocked = currentColumn.key === "blocked" && targetColumn.key !== "blocked";
+      const isMovingToBlocked = targetColumn.key === "blocked" && currentColumn.key !== "blocked";
+      const isMovingToClientApproval =
+        targetColumn.key === "client_approval" && currentColumn.key !== "client_approval";
+
+      if (isMovingFromBlocked) {
+        const assignees = await boardRepository.listTaskAssignees(taskId);
+        const isAssignee = task.assigneeSub === actor.sub || assignees.some((a) => a.userSub === actor.sub);
+        if (!canUnblockTask(actor.role, member?.role, task.blockType, isAssignee)) {
+          throw new ForbiddenError("No tienes permisos para desbloquear esta tarea");
+        }
       }
 
-      if (
-        ProjectTask.isFinalizationColumn(targetColumn.key) &&
-        hasSubtasks &&
-        calculatedProgress < 100
-      ) {
-        throw new BadRequestError(
-          "No puedes mover la tarea a la columna final sin completar todas las subtareas",
-        );
+      if (isMovingToBlocked && !canBlockTask(actor.role, member?.role)) {
+        throw new ForbiddenError("No tienes permisos para bloquear esta tarea");
       }
-      const completedAt = ProjectTask.isCompleted(targetColumn.key, calculatedProgress)
-        ? task.completedAt ?? new Date()
-        : null;
 
       return db.transaction(async (tx) => {
         const txBoardRepository = createBoardRepository(tx);
         const txProjectRepository = createProjectRepository(tx);
         const txMemberRepository = createMemberRepository(tx);
+
+        const unblockingPatch = isMovingFromBlocked
+          ? { blockReason: null, blockType: null, blockedAt: null, blockedBySub: null }
+          : {};
+
+        const blockingPatch = isMovingToBlocked
+          ? {
+              blockReason: patch.blockReason ?? "Impedimento interno",
+              blockType: "internal_impediment" as const,
+              blockedAt: new Date(),
+              blockedBySub: actor.sub,
+            }
+          : {};
+
+        const clientApprovalPatch = isMovingToClientApproval
+          ? { clientApprovalRequestedAt: new Date(), isClientVisible: true }
+          : {};
+
         const updated = await txBoardRepository.updateTaskById(taskId, {
           columnId: patch.columnId,
           title: patch.title,
@@ -214,9 +205,12 @@ export const createBoardTaskService = (
           deadline: patch.dueDate,
           checklistProgress: calculatedProgress,
           blockedByTaskId: patch.blockedByTaskId,
-          isClientVisible: patch.clientVisible,
+          isClientVisible: isMovingToClientApproval ? true : patch.clientVisible,
           position: patch.position,
           completedAt,
+          ...unblockingPatch,
+          ...blockingPatch,
+          ...clientApprovalPatch,
         });
         if (!updated) throw new NotFoundError("Tarea no encontrada");
         if (patch.subtasks !== undefined) {
@@ -249,7 +243,7 @@ export const createBoardTaskService = (
         });
 
         if (patch.columnId && patch.columnId !== task.columnId) {
-          const assigneeSubs = (await txBoardRepository.listTaskAssignees(taskId)).map((assignee) => assignee.userSub);
+          const assigneeSubs = (await txBoardRepository.listTaskAssignees(taskId)).map((a) => a.userSub);
           await collabEvents.emit("task.moved", task.projectId, actor.sub, {
             taskId: task.id,
             taskTitle: updated.title,
@@ -259,6 +253,27 @@ export const createBoardTaskService = (
             assigneeSubs,
             clientVisible: updated.isClientVisible,
           }, tx);
+
+          if (isMovingFromBlocked) {
+            await collabEvents.emit("task.unblocked", task.projectId, actor.sub, {
+              taskId: task.id,
+              taskTitle: updated.title,
+              targetColumnKey: targetColumn.key,
+              assigneeSubs,
+              clientVisible: updated.isClientVisible,
+            }, tx);
+          }
+
+          if (isMovingToBlocked) {
+            await collabEvents.emit("task.blocked", task.projectId, actor.sub, {
+              taskId: task.id,
+              taskTitle: updated.title,
+              blockReason: patch.blockReason ?? "Impedimento interno",
+              blockType: "internal_impediment",
+              assigneeSubs,
+              clientVisible: updated.isClientVisible,
+            }, tx);
+          }
         }
 
         if (patch.assignees !== undefined) {

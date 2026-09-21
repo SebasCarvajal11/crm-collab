@@ -20,6 +20,8 @@ import {
   ProjectTaskIdParamSchema,
   CreateTaskCommentSchema,
   CreateTaskFileMetadataSchema,
+  BlockTaskSchema,
+  UnblockTaskSchema,
 } from "../collab.schemas";
 
 const boardRepository = createBoardRepository(db);
@@ -67,6 +69,31 @@ boardRoutes.patch(
   zValidator("param", TaskIdParamSchema),
   zValidator("json", UpdateTaskSchema),
   boardController.updateTask
+);
+
+boardRoutes.post(
+  "/projects/:projectId/tasks/:taskId/block",
+  zValidator("param", ProjectTaskIdParamSchema),
+  zValidator("json", BlockTaskSchema),
+  boardController.blockTask
+);
+boardRoutes.post(
+  "/projects/:projectId/tasks/:taskId/unblock",
+  zValidator("param", ProjectTaskIdParamSchema),
+  zValidator("json", UnblockTaskSchema),
+  boardController.unblockTask
+);
+boardRoutes.post(
+  "/tasks/:taskId/block",
+  zValidator("param", TaskIdParamSchema),
+  zValidator("json", BlockTaskSchema),
+  boardController.blockTask
+);
+boardRoutes.post(
+  "/tasks/:taskId/unblock",
+  zValidator("param", TaskIdParamSchema),
+  zValidator("json", UnblockTaskSchema),
+  boardController.unblockTask
 );
 
 boardRoutes.get(

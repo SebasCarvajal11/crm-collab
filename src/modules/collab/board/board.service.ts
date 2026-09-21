@@ -1,6 +1,7 @@
 import { createBoardColumnService } from "./board-column.service";
 import { createBoardTaskService } from "./board-task.service";
 import { createBoardTaskInteractionService } from "./board-task-interaction.service";
+import { createBoardTaskBlockingService } from "./board-task-blocking.service";
 import type { createBoardRepository } from "./board.repository";
 import type { createProjectRepository } from "../project/project.repository";
 import type { createMemberRepository } from "../member/member.repository";
@@ -9,6 +10,7 @@ import type { createFileRepository } from "../file/file.repository";
 export { createBoardColumnService } from "./board-column.service";
 export { createBoardTaskService } from "./board-task.service";
 export { createBoardTaskInteractionService } from "./board-task-interaction.service";
+export { createBoardTaskBlockingService } from "./board-task-blocking.service";
 export type { Actor, RequestMeta } from "./board.types";
 
 export const createBoardService = (
@@ -33,10 +35,16 @@ export const createBoardService = (
     memberRepository,
     fileRepository,
   );
+  const blockingService = createBoardTaskBlockingService(
+    boardRepository,
+    projectRepository,
+    memberRepository,
+  );
 
   return {
     ...columnService,
     ...taskService,
     ...interactionService,
+    ...blockingService,
   };
 };

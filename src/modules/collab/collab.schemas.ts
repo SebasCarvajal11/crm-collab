@@ -164,6 +164,17 @@ export const UpdateTaskSchema = z.object({
   client_visible: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
   subtasks: z.array(SubtaskSchema).max(50).optional(),
+  block_reason: z.string().max(1000).nullable().optional(),
+  block_type: z.enum(["client_timeout", "internal_impediment"]).nullable().optional(),
+});
+
+export const BlockTaskSchema = z.object({
+  reason: z.string().trim().min(5, "El motivo de bloqueo debe tener al menos 5 caracteres").max(1000),
+});
+
+export const UnblockTaskSchema = z.object({
+  target_column_id: z.string().uuid().optional(),
+  resolution_comment: z.string().max(1000).optional(),
 });
 
 export const CreateTaskCommentSchema = z.object({
@@ -395,3 +406,5 @@ export type GenerateUploadUrlBody = z.infer<typeof GenerateUploadUrlSchema>;
 export type CreateAmendmentDraftBody = z.infer<typeof CreateAmendmentDraftSchema>;
 export type RequestClientAmendmentBody = z.infer<typeof RequestClientAmendmentSchema>;
 export type SignAmendmentBody = z.infer<typeof SignAmendmentSchema>;
+export type BlockTaskBody = z.infer<typeof BlockTaskSchema>;
+export type UnblockTaskBody = z.infer<typeof UnblockTaskSchema>;

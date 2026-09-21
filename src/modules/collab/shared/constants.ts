@@ -18,15 +18,18 @@ export const BLOCKED_MIMES = new Set([
   "application/x-php",
 ]);
 
+export const CLIENT_APPROVAL_TIMEOUT_HOURS = 48;
+export const CLIENT_APPROVAL_TIMEOUT_MS = CLIENT_APPROVAL_TIMEOUT_HOURS * 60 * 60 * 1000;
+
 export const defaultColumnsByType = (type: ProjectType) =>
   type === "campaign_service"
     ? [
         { key: "pending", title: "Pendiente", position: 0, isClientVisible: false },
-        { key: "doing", title: "Haciendo", position: 1, isClientVisible: false },
+        { key: "doing", title: "En Curso", position: 1, isClientVisible: true },
         { key: "internal_review", title: "En Revisión Interna", position: 2, isClientVisible: false },
-        { key: "client_approval", title: "En Aprobación Cliente", position: 3, isClientVisible: true },
-        { key: "blocked", title: "Bloqueado", position: 4, isClientVisible: false },
-        { key: "done", title: "Hecho", position: 5, isClientVisible: true },
+        { key: "client_approval", title: "En Aprobación", position: 3, isClientVisible: true },
+        { key: "blocked", title: "Bloqueado", position: 4, isClientVisible: true },
+        { key: "done", title: "Terminado", position: 5, isClientVisible: true },
       ]
     : [
         { key: "pending", title: "Pendiente", position: 0, isClientVisible: false },

@@ -12,6 +12,8 @@ export const collabEventTypeSchema = z.enum([
   "task.updated",
   "task.moved",
   "task.assigned",
+  "task.blocked",
+  "task.unblocked",
   "chat.message.internal",
   "chat.message.external",
   "chat.mention",

@@ -7,6 +7,7 @@ import { getRedisConnection, initRedis } from "../shared/redis";
 import { serviceMetrics } from "../app";
 import { pruneReadNotifications } from "../jobs/prune-notifications";
 import { pruneExpiredMediaAccessCache } from "../jobs/prune-media-access-cache";
+import { checkClientApprovalSla } from "../jobs/check-approval-sla";
 
 const logger = getLogger();
 
@@ -30,6 +31,7 @@ const healthcheck = startWorkerHealthcheck("collab-outbox-worker", {
 });
 let lastNotificationPruneAt = 0;
 let lastMediaAccessCachePruneAt = 0;
+let lastSlaCheckAt = 0;
 
 const tick = async () => {
   try {
@@ -51,6 +53,13 @@ const tick = async () => {
       const removed = await pruneExpiredMediaAccessCache();
       lastMediaAccessCachePruneAt = Date.now();
       logger.info({ removed }, "caché expirada de accesos a media depurada");
+    }
+    if (Date.now() - lastSlaCheckAt >= 60_000) {
+      const { blockedCount } = await checkClientApprovalSla();
+      lastSlaCheckAt = Date.now();
+      if (blockedCount > 0) {
+        logger.warn({ blockedCount }, "tareas bloqueadas automáticamente por timeout de SLA de aprobación");
+      }
     }
   } catch (err) {
     logger.error({ err, topic: "worker:collab-outbox" }, "error en ciclo");

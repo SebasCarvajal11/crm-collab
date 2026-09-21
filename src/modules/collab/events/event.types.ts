@@ -7,6 +7,8 @@ export type CollabEventType =
   | "task.updated"
   | "task.moved"
   | "task.assigned"
+  | "task.blocked"
+  | "task.unblocked"
   | "task.comment.created"
   | "chat.message.internal"
   | "chat.message.external"
@@ -112,10 +114,29 @@ export interface FileApprovedEvent {
   approvedBySub: string;
 }
 
+export interface TaskBlockedEvent {
+  taskId: string;
+  taskTitle: string;
+  blockReason: string;
+  blockType: string;
+  assigneeSubs?: string[];
+  clientVisible?: boolean;
+}
+
+export interface TaskUnblockedEvent {
+  taskId: string;
+  taskTitle: string;
+  targetColumnKey: string;
+  assigneeSubs?: string[];
+  clientVisible?: boolean;
+}
+
 export type CollabEventPayload =
   | ProjectCreatedEvent
   | TaskMovedEvent
   | TaskAssignedEvent
+  | TaskBlockedEvent
+  | TaskUnblockedEvent
   | ChatMentionEvent
   | MinorChangeRequestCreatedEvent
   | MinorChangeRequestResolvedEvent

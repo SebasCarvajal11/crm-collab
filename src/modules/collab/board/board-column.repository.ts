@@ -141,4 +141,13 @@ export const createBoardColumnRepository = (conn: DbOrTx) => ({
       .limit(1);
     return row ?? null;
   },
+
+  findTaskColumnByKey: async (projectId: string, key: string) => {
+    const [row] = await conn
+      .select()
+      .from(projectTaskColumns)
+      .where(and(eq(projectTaskColumns.projectId, projectId), eq(projectTaskColumns.key, key as any)))
+      .limit(1);
+    return row ?? null;
+  },
 });
