@@ -1,10 +1,15 @@
-export type TaskColumnKey =
+/** Columnas canónicas del tablero para todos los proyectos. */
+export type CanonicalTaskColumnKey =
   | "pending"
   | "doing"
   | "internal_review"
   | "client_approval"
   | "blocked"
-  | "done"
+  | "done";
+
+/** Claves admitidas (incluye valores legacy de BD para retrocompatibilidad). */
+export type TaskColumnKey =
+  | CanonicalTaskColumnKey
   | "art_approved"
   | "in_production"
   | "quality_control"

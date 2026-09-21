@@ -44,8 +44,8 @@ export const createProjectRepository = (conn: DbOrTx) => ({
       WITH task_agg AS (
         SELECT
           COUNT(t.id)::int AS total,
-          COUNT(t.id) FILTER (WHERE c.key IN ('done','completed'))::int AS done_count,
-          COUNT(t.id) FILTER (WHERE c.key IN ('client_approval','quality_control'))::int AS review_count,
+          COUNT(t.id) FILTER (WHERE c.key = 'done')::int AS done_count,
+          COUNT(t.id) FILTER (WHERE c.key = 'client_approval')::int AS review_count,
           COUNT(t.id) FILTER (WHERE c.key <> 'pending')::int AS non_pending_count,
           COALESCE(ROUND(AVG(
             CASE c.key
@@ -53,14 +53,8 @@ export const createProjectRepository = (conn: DbOrTx) => ({
               WHEN 'doing' THEN 25
               WHEN 'internal_review' THEN 50
               WHEN 'client_approval' THEN 75
-              WHEN 'done' THEN 100
               WHEN 'blocked' THEN 10
-              WHEN 'waiting_material' THEN 10
-              WHEN 'completed' THEN 100
-              WHEN 'in_production' THEN 60
-              WHEN 'quality_control' THEN 80
-              WHEN 'shipped' THEN 100
-              WHEN 'art_approved' THEN 30
+              WHEN 'done' THEN 100
               ELSE 0
             END
           ))::int, 0) AS progress_avg

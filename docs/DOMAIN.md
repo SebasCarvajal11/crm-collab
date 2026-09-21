@@ -8,16 +8,21 @@ Este documento detalla los conceptos de negocio, entidades e invariantes de gest
 
 CIMA gestiona dos tipologías de proyectos con dinámicas operativas diferenciadas:
 
-| Tipo de Proyecto (`project_type`) | Naturaleza | Columnas Kanban Habituales |
+| Tipo de Proyecto (`project_type`) | Naturaleza | Columnas Canónicas (SSOT) |
 | :--- | :--- | :--- |
-| **`campaign_service`** | Servicios creativos, diseño gráfico, producción audiovisual y marketing digital. | `pending`, `doing`, `internal_review`, `client_approval`, `done` |
-| **`product_order`** | Fabricación y entrega de productos físicos (merchandising, camisetas, packaging). | `pending`, `art_approved`, `in_production`, `blocked`, `done` |
+| **`campaign_service`** | Servicios creativos, diseño gráfico, producción audiovisual y marketing digital. | `pending`, `doing`, `internal_review`, `client_approval`, `blocked`, `done` |
+| **`product_order`** | Fabricación y entrega de productos físicos (merchandising, camisetas, packaging). | `pending`, `doing`, `internal_review`, `client_approval`, `blocked`, `done` |
+
+> [!NOTE]
+> **Visibilidad por Rol (RBAC)**:
+> - **Administrador y Trabajador**: Tienen visibilidad total de las **6 columnas** del ciclo de vida.
+> - **Cliente**: Visualiza únicamente las **4 columnas** de entrega (`doing`, `client_approval`, `blocked`, `done`). Las etapas internas (`pending` e `internal_review`) permanecen invisibles.
 
 ---
 
 ## 2. Tablero Kanban y Tareas
 
-- **Columnas (`project_task_columns`)**: Definen las etapas del flujo de valor. Cada columna cuenta con un indicador `is_client_visible`: las columnas de revisión interna no son visibles para el cliente.
+- **Columnas (`project_task_columns`)**: Definen las etapas estandarizadas del flujo de valor. Cada columna cuenta con un indicador `is_client_visible`: las columnas de gestión interna (`pending`, `internal_review`) están ocultas para el cliente.
 - **Tareas (`project_tasks`)**: Unidad básica de trabajo. Soportan:
   - Prioridades: `low`, `medium`, `high`, `urgent`.
   - Bloqueos: Pueden estar bloqueadas por otra tarea (`blocked_by_task_id`).
