@@ -21,22 +21,13 @@ export const BLOCKED_MIMES = new Set([
 export const CLIENT_APPROVAL_TIMEOUT_HOURS = 48;
 export const CLIENT_APPROVAL_TIMEOUT_MS = CLIENT_APPROVAL_TIMEOUT_HOURS * 60 * 60 * 1000;
 
-export const defaultColumnsByType = (type: ProjectType) =>
-  type === "campaign_service"
-    ? [
-        { key: "pending", title: "Pendiente", position: 0, isClientVisible: false },
-        { key: "doing", title: "En Curso", position: 1, isClientVisible: true },
-        { key: "internal_review", title: "En Revisión Interna", position: 2, isClientVisible: false },
-        { key: "client_approval", title: "En Aprobación", position: 3, isClientVisible: true },
-        { key: "blocked", title: "Bloqueado", position: 4, isClientVisible: true },
-        { key: "done", title: "Terminado", position: 5, isClientVisible: true },
-      ]
-    : [
-        { key: "pending", title: "Pendiente", position: 0, isClientVisible: false },
-        { key: "art_approved", title: "Arte Aprobado", position: 1, isClientVisible: true },
-        { key: "in_production", title: "En Producción", position: 2, isClientVisible: false },
-        { key: "quality_control", title: "En Control de Calidad", position: 3, isClientVisible: false },
-        { key: "shipped", title: "Enviado", position: 4, isClientVisible: true },
-        { key: "completed", title: "Completado", position: 5, isClientVisible: true },
-        { key: "waiting_material", title: "Esperando Material", position: 6, isClientVisible: false },
-      ];
+export const DEFAULT_PROJECT_COLUMNS = [
+  { key: "pending" as const, title: "Pendiente", position: 0, isClientVisible: false },
+  { key: "doing" as const, title: "En Curso", position: 1, isClientVisible: true },
+  { key: "internal_review" as const, title: "En Revisión Interna", position: 2, isClientVisible: false },
+  { key: "client_approval" as const, title: "En Aprobación", position: 3, isClientVisible: true },
+  { key: "blocked" as const, title: "Bloqueado", position: 4, isClientVisible: true },
+  { key: "done" as const, title: "Terminado", position: 5, isClientVisible: true },
+] as const;
+
+export const defaultColumnsByType = (_type?: ProjectType) => DEFAULT_PROJECT_COLUMNS;

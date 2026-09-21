@@ -18,25 +18,8 @@ import {
 } from "./schema";
 import { eq } from "drizzle-orm";
 
-// Columnas por defecto para cada tipo de proyecto
-const CAMPAIGN_COLUMNS = [
-  { key: "pending" as const, title: "Pendiente", position: 0, isClientVisible: false },
-  { key: "doing" as const, title: "En Proceso", position: 1, isClientVisible: false },
-  { key: "internal_review" as const, title: "Revisión Interna", position: 2, isClientVisible: false },
-  { key: "client_approval" as const, title: "Aprobación Cliente", position: 3, isClientVisible: true },
-  { key: "blocked" as const, title: "Bloqueado", position: 4, isClientVisible: false },
-  { key: "done" as const, title: "Completado", position: 5, isClientVisible: true },
-];
-
-const PRODUCT_COLUMNS = [
-  { key: "pending" as const, title: "Pendiente", position: 0, isClientVisible: false },
-  { key: "art_approved" as const, title: "Arte Aprobado", position: 1, isClientVisible: true },
-  { key: "in_production" as const, title: "En Producción", position: 2, isClientVisible: true },
-  { key: "quality_control" as const, title: "Control Calidad", position: 3, isClientVisible: false },
-  { key: "waiting_material" as const, title: "Esperando Material", position: 4, isClientVisible: false },
-  { key: "shipped" as const, title: "Enviado", position: 5, isClientVisible: true },
-  { key: "completed" as const, title: "Entregado", position: 6, isClientVisible: true },
-];
+// Columnas canónicas unificadas para todos los proyectos
+import { DEFAULT_PROJECT_COLUMNS } from "../modules/collab/shared/constants";
 
 interface ProjectSeed {
   name: string;
@@ -138,10 +121,10 @@ $15,000 USD
 - Fecha límite: 15 de Junio 2026
 - Dirección: Av. Tecnología 1500, Oficina 401`,
     tasks: [
-      { columnKey: "art_approved", title: "Arte para camisetas", description: "Diseño frontal y espalda para serigrafía", priority: "high", isClientVisible: true, checklistProgress: 100 },
-      { columnKey: "in_production", title: "Producción de camisetas", description: "200 unidades en 4 tallas", priority: "high", isClientVisible: true, checklistProgress: 60 },
-      { columnKey: "art_approved", title: "Arte para tazas", description: "Diseño para sublimación", priority: "medium", isClientVisible: true, checklistProgress: 100 },
-      { columnKey: "quality_control", title: "Control de tazas", description: "Revisión de 150 unidades producidas", priority: "medium", isClientVisible: false, checklistProgress: 40 },
+      { columnKey: "doing", title: "Arte para camisetas", description: "Diseño frontal y espalda para serigrafía", priority: "high", isClientVisible: true, checklistProgress: 100 },
+      { columnKey: "doing", title: "Producción de camisetas", description: "200 unidades en 4 tallas", priority: "high", isClientVisible: true, checklistProgress: 60 },
+      { columnKey: "doing", title: "Arte para tazas", description: "Diseño para sublimación", priority: "medium", isClientVisible: true, checklistProgress: 100 },
+      { columnKey: "internal_review", title: "Control de tazas", description: "Revisión de 150 unidades producidas", priority: "medium", isClientVisible: false, checklistProgress: 40 },
       { columnKey: "pending", title: "Producción de libretas", description: "300 libretas A5 con logo en pasta", priority: "medium", isClientVisible: false, checklistProgress: 0 },
       { columnKey: "pending", title: "Producción de bolígrafos", description: "500 bolígrafos con grabado láser", priority: "low", isClientVisible: false, checklistProgress: 0 },
     ],
@@ -439,9 +422,9 @@ Modernizar la imagen de marca para atraer público más joven sin perder la eleg
 - Áreas comunes (restaurante, spa, gym, pool)`,
     tasks: [
       { columnKey: "done", title: "Relevamiento in situ", description: "Visita y mediciones", priority: "high", isClientVisible: true, checklistProgress: 100 },
-      { columnKey: "art_approved", title: "Diseño de sistema", description: "Familia de señales", priority: "high", isClientVisible: true, checklistProgress: 100 },
-      { columnKey: "in_production", title: "Señales de habitaciones", description: "200 unidades acrílico", priority: "high", isClientVisible: true, checklistProgress: 40 },
-      { columnKey: "waiting_material", title: "Directorio lobby", description: "Estructura metálica iluminada", priority: "medium", isClientVisible: false, checklistProgress: 20 },
+      { columnKey: "doing", title: "Diseño de sistema", description: "Familia de señales", priority: "high", isClientVisible: true, checklistProgress: 100 },
+      { columnKey: "doing", title: "Señales de habitaciones", description: "200 unidades acrílico", priority: "high", isClientVisible: true, checklistProgress: 40 },
+      { columnKey: "blocked", title: "Directorio lobby", description: "Estructura metálica iluminada", priority: "medium", isClientVisible: true, checklistProgress: 20 },
       { columnKey: "pending", title: "Señales de emergencia", description: "Fotoluminiscentes normativa", priority: "high", isClientVisible: false, checklistProgress: 0 },
       { columnKey: "pending", title: "Instalación", description: "Colocación de todas las señales", priority: "medium", isClientVisible: false, checklistProgress: 0 },
     ],
@@ -599,8 +582,8 @@ async function seed() {
         });
       }
 
-      // Crear columnas según tipo de proyecto
-      const columnsConfig = projectSeed.type === "campaign_service" ? CAMPAIGN_COLUMNS : PRODUCT_COLUMNS;
+      // Crear columnas canónicas para el proyecto
+      const columnsConfig = DEFAULT_PROJECT_COLUMNS;
       const createdColumns: Array<{ id: string; key: string }> = [];
 
       for (const col of columnsConfig) {
