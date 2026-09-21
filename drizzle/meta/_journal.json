@@ -85,6 +85,13 @@
       "when": 1789414560697,
       "tag": "0011_young_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789997034865,
+      "tag": "0012_violet_glorian",
+      "breakpoints": true
     }
   ]
 }
