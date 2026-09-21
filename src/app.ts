@@ -7,7 +7,7 @@ import { createOpenApiRoutes } from "./openapi/openapi.routes";
 import { collabModuleRoutes } from "./modules/collab/index";
 import { onError } from "./shared/middlewares/error-handler.middleware";
 import type { AppEnv } from "./shared/middlewares/auth.middleware";
-import { authMiddleware } from "./shared/middlewares/auth.middleware";
+import { authMiddleware, requireRole } from "./shared/middlewares/auth.middleware";
 import { securityHeadersMiddleware } from "./shared/middlewares/security.middleware";
 import { checkPostgres, checkRedis } from "./shared/health";
 import { buildHealthResponse } from "@sebascarvajal11/cima-contracts/health";
@@ -87,8 +87,10 @@ export const createApp = () => {
   const internalRoutes = new Hono<AppEnv>();
   internalRoutes.route("/api/v1", createGatewayRoutes());
 
-  // Ops / DLQ routes (internal only)
+  // Ops / DLQ routes (internal only - protegidas por autenticación admin)
   const ops = new Hono<AppEnv>();
+  ops.use("*", authMiddleware);
+  ops.use("*", requireRole("admin"));
   
   ops.get("/dlq/auth-events", async (c) => {
     const limit = c.req.query("limit") ? Number(c.req.query("limit")) : 25;
