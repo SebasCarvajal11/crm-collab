@@ -1,4 +1,9 @@
-import { BadRequestError, ForbiddenError, NotFoundError } from "../../../shared/middlewares/error-handler.middleware";
+import {
+  AppError,
+  BadRequestError,
+  ForbiddenError,
+  NotFoundError,
+} from "../../../shared/middlewares/error-handler.middleware";
 import { collabEvents } from "../events";
 import { getMediaDocumentAccessUrl, deleteDocumentInMedia } from "../../../shared/media-command-client";
 import { canMoveTasks } from "../shared/guards";
