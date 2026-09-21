@@ -100,7 +100,13 @@ export const createFileManagementService = (
       if (!canDelete) {
         throw new ForbiddenError("Solo el creador, un administrador del proyecto o un admin global puede eliminar el archivo");
       }
-      await deleteDocumentInMedia(actor, file.storagePath);
+      try {
+        await deleteDocumentInMedia(actor, file.storagePath);
+      } catch (err) {
+        if (!(err instanceof AppError && err.statusCode === 404)) {
+          throw err;
+        }
+      }
       await db.transaction(async (tx) => {
         await createFileRepository(tx).deleteFileById(fileId);
         await createAuditRepository(tx).createAuditLog({

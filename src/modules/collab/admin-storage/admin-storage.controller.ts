@@ -4,6 +4,7 @@ import { actorFromContext } from "../actor";
 import { db } from "../../../db/connection";
 import { createAdminStorageRepository } from "./admin-storage.repository";
 import { createAdminStorageService } from "./admin-storage.service";
+import { AppError } from "../../../shared/middlewares/error-handler.middleware";
 import type { PurgeBatchInput } from "./admin-storage.types";
 
 const getIp = (c: Context) =>
@@ -39,15 +40,22 @@ export const adminStorageController = {
       // Body opcional
     }
 
-    const data = await service.purgeSingleFile(
-      actor,
-      fileId,
-      body.reason || "Depurado por administración",
-      Boolean(body.forcePurgeSigned),
-      { ipAddress, userAgent }
-    );
-
-    return c.json({ data }, 200);
+    try {
+      const data = await service.purgeSingleFile(
+        actor,
+        fileId,
+        body.reason || "Depurado por administración",
+        Boolean(body.forcePurgeSigned),
+        { ipAddress, userAgent }
+      );
+      return c.json({ data }, 200);
+    } catch (err: unknown) {
+      if (err instanceof AppError) {
+        return c.json({ error: err.message }, err.statusCode as any);
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: msg }, 500);
+    }
   },
 
   purgeBatch: async (c: Context<AppEnv>) => {
@@ -62,7 +70,15 @@ export const adminStorageController = {
       // Body vacío
     }
 
-    const data = await service.purgeBatch(actor, body, { ipAddress, userAgent });
-    return c.json({ data }, 200);
+    try {
+      const data = await service.purgeBatch(actor, body, { ipAddress, userAgent });
+      return c.json({ data }, 200);
+    } catch (err: unknown) {
+      if (err instanceof AppError) {
+        return c.json({ error: err.message }, err.statusCode as any);
+      }
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: msg }, 500);
+    }
   },
 };

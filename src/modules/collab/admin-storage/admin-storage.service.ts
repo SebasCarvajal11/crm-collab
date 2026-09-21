@@ -195,11 +195,14 @@ export const createAdminStorageService = (
         );
       }
 
+      let mediaDeletion = "deleted";
       try {
         await deleteDocumentInMedia(actor, file.storagePath);
       } catch (err) {
-        if (!(err instanceof AppError && err.statusCode === 404)) {
-          throw err;
+        if (err instanceof AppError && err.statusCode === 404) {
+          mediaDeletion = "already_not_found";
+        } else {
+          mediaDeletion = "media_unreachable_or_timed_out";
         }
       }
 
@@ -216,7 +219,7 @@ export const createAdminStorageService = (
           resourceId: fileId,
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
-          details: { fileName: file.fileName, freedBytes: file.sizeBytes, reason },
+          details: { fileName: file.fileName, freedBytes: file.sizeBytes, reason, mediaDeletion },
         });
       });
 
