@@ -261,6 +261,25 @@ components:
           type: boolean
         position:
           type: integer
+        blockReason:
+          type: string
+          nullable: true
+        blockType:
+          type: string
+          nullable: true
+          enum: [internal_impediment, client_timeout]
+        blockedAt:
+          type: string
+          format: date-time
+          nullable: true
+        blockedBySub:
+          type: string
+          format: uuid
+          nullable: true
+        clientApprovalRequestedAt:
+          type: string
+          format: date-time
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1152,6 +1171,90 @@ paths:
       responses:
         '200':
           description: Tarea actualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+
+  /api/v1/collab/projects/{projectId}/tasks/{taskId}/block:
+    post:
+      summary: Bloquear tarea con causal y motivo
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+      responses:
+        '200':
+          description: Tarea bloqueada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Task'
+
+  /api/v1/collab/projects/{projectId}/tasks/{taskId}/unblock:
+    post:
+      summary: Desbloquear tarea y reactivar flujo
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_column_id:
+                  type: string
+                  format: uuid
+                resolution_comment:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Tarea desbloqueada
           content:
             application/json:
               schema:
