@@ -81,6 +81,9 @@ export const createFileManagementService = (
     getFileAccess: async (actor: Actor, fileId: string, forceDownload: boolean) => {
       const file = await fileRepository.findFileById(fileId);
       if (!file) throw new NotFoundError("Archivo no encontrado");
+      if (file.isPurged) {
+        throw new BadRequestError("El archivo ha sido depurado por administración para liberar espacio de almacenamiento");
+      }
       const { member } = await assertProjectAccess(accessRepo, actor, file.projectId);
       if ((actor.role === "client" || member?.role === "client") && !file.isClientVisible) {
         throw new ForbiddenError("No tienes permiso para descargar este archivo");

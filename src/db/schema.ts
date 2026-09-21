@@ -363,6 +363,10 @@ export const projectFiles = collabSchema.table(
     approvedAt: timestamp("approved_at", { mode: "date" }),
     createdBySub: uuid("created_by_sub").notNull(),
     createdByEmail: varchar("created_by_email", { length: 255 }),
+    isPurged: boolean("is_purged").default(false).notNull(),
+    purgedAt: timestamp("purged_at", { mode: "date" }),
+    purgedBySub: uuid("purged_by_sub"),
+    purgedReason: varchar("purged_reason", { length: 255 }),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
   },
   (t) => [
@@ -372,6 +376,8 @@ export const projectFiles = collabSchema.table(
     index("idx_project_files_task_id").on(t.taskId),
     index("idx_project_files_created_by_sub").on(t.createdBySub),
     uniqueIndex("uq_project_files_project_name_version").on(t.projectId, t.fileName, t.version),
+    index("idx_project_files_purged").on(t.isPurged, t.sizeBytes),
+    index("idx_project_files_project_folder").on(t.projectId, t.folder, t.isPurged),
   ]
 );
 

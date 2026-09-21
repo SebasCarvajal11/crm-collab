@@ -10,6 +10,7 @@ import { changeRequestRoutes } from "./change-request/change-request.routes";
 import { fileRoutes } from "./file/file.routes";
 import { briefRoutes } from "./brief/brief.routes";
 import { contractRoutes } from "./contract/contract.routes";
+import { adminStorageRoutes } from "./admin-storage/admin-storage.routes";
 
 export const collabModuleRoutes = new Hono<AppEnv>();
 collabModuleRoutes.use("*", authMiddleware);
@@ -23,3 +24,4 @@ collabModuleRoutes.route("/", changeRequestRoutes);
 collabModuleRoutes.route("/", fileRoutes);
 collabModuleRoutes.route("/", briefRoutes);
 collabModuleRoutes.route("/", contractRoutes);
+collabModuleRoutes.route("/admin/storage", adminStorageRoutes);

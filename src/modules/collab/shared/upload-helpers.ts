@@ -6,7 +6,8 @@ import {
 import { env } from "../../../config/env";
 import { BLOCKED_EXTENSIONS, BLOCKED_MIMES } from "./constants";
 
-export const isCollabManagedStoragePath = (storagePath: string) => storagePath.startsWith("projects/");
+export const isCollabManagedStoragePath = (storagePath: string) =>
+  storagePath.startsWith("projects/") || storagePath.startsWith("clients/");
 
 export const assertAllowedUploadMime = (mimeType: string, fileName: string) => {
   const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
@@ -23,13 +24,17 @@ export const assertProductionObjectRegistered = async (
   sizeBytes: number,
   taskId?: string,
 ): Promise<{ sizeBytes: number; mimeType: string }> => {
-  const projectPrefix = `projects/${projectId}/`;
-  if (!storagePath.startsWith(projectPrefix)) {
+  const projectSegment = `projects/${projectId}/`;
+  const isLegacyProject = storagePath.startsWith(projectSegment);
+  const isHierarchicalProject = storagePath.startsWith("clients/") && storagePath.includes(`/${projectSegment}`);
+  if (!isLegacyProject && !isHierarchicalProject) {
     throw new BadRequestError("storage_path no pertenece al proyecto");
   }
   if (taskId) {
-    const taskPrefix = `projects/${projectId}/tasks/${taskId}/`;
-    if (!storagePath.startsWith(taskPrefix)) {
+    const taskSegment = `projects/${projectId}/tasks/${taskId}/`;
+    const isLegacyTask = storagePath.startsWith(taskSegment);
+    const isHierarchicalTask = storagePath.startsWith("clients/") && storagePath.includes(`/${taskSegment}`);
+    if (!isLegacyTask && !isHierarchicalTask) {
       throw new BadRequestError("storage_path no pertenece a la tarea");
     }
   }

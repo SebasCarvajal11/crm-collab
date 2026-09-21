@@ -119,9 +119,10 @@ export const createFileUploadService = (
       projectId: string,
       payload: { fileName: string; mimeType: string; sizeBytes: number }
     ) => {
-      await assertProjectAccess(accessRepo, actor, projectId);
+      const { project } = await assertProjectAccess(accessRepo, actor, projectId);
       assertAllowedUploadMime(payload.mimeType, payload.fileName);
-      const key = `projects/${projectId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
+      const clientKey = project.clientSub ? project.clientSub : "internal-cima";
+      const key = `clients/${clientKey}/projects/${projectId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
       return createMediaDocumentUploadUrl(
         actor,
         key,
@@ -137,14 +138,15 @@ export const createFileUploadService = (
       taskId: string,
       payload: { fileName: string; mimeType: string; sizeBytes: number }
     ) => {
-      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
+      const { project, member } = await assertProjectAccess(accessRepo, actor, projectId);
       const task = await boardRepository.findTaskById(taskId);
       if (!task || task.projectId !== projectId) throw new NotFoundError("Tarea no encontrada");
       if (actor.role === "client" && !canInternalChat(actor.role, member?.role)) {
         if (!task.isClientVisible) throw new ForbiddenError("No tienes acceso a esta tarea");
       }
       assertAllowedUploadMime(payload.mimeType, payload.fileName);
-      const key = `projects/${projectId}/tasks/${taskId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
+      const clientKey = project.clientSub ? project.clientSub : "internal-cima";
+      const key = `clients/${clientKey}/projects/${projectId}/tasks/${taskId}/${uuidv4()}-${sanitizeFileName(payload.fileName)}`;
       return createMediaDocumentUploadUrl(
         actor,
         key,
@@ -156,8 +158,9 @@ export const createFileUploadService = (
 
     abortUnregisteredFileUpload: async (actor: Actor, projectId: string, objectKey: string) => {
       await assertProjectAccess(accessRepo, actor, projectId);
-      const prefix = `projects/${projectId}/`;
-      if (!objectKey.startsWith(prefix)) {
+      const isLegacy = objectKey.startsWith(`projects/${projectId}/`);
+      const isHierarchical = objectKey.startsWith("clients/") && objectKey.includes(`/projects/${projectId}/`);
+      if (!isLegacy && !isHierarchical) {
         throw new ForbiddenError("La clave de almacenamiento no pertenece a este proyecto");
       }
       const existing = await fileRepository.findFileByStoragePath(objectKey);

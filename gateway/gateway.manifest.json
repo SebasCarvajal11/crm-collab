@@ -411,6 +411,24 @@
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/sign",
       "openapi_ref": "POST /api/v1/collab/projects/{projectId}/contract/amendments/{amendmentId}/sign"
+    },
+    {
+      "endpoint": "/api/v1/collab/admin/storage/tree",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/admin/storage/tree",
+      "openapi_ref": "GET /api/v1/collab/admin/storage/tree"
+    },
+    {
+      "endpoint": "/api/v1/collab/admin/storage/files/{fileId}",
+      "method": "DELETE",
+      "backend_url": "/api/v1/collab/admin/storage/files/{fileId}",
+      "openapi_ref": "DELETE /api/v1/collab/admin/storage/files/{fileId}"
+    },
+    {
+      "endpoint": "/api/v1/collab/admin/storage/purge",
+      "method": "POST",
+      "backend_url": "/api/v1/collab/admin/storage/purge",
+      "openapi_ref": "POST /api/v1/collab/admin/storage/purge"
     }
   ]
 }

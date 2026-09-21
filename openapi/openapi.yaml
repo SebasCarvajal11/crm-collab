@@ -2461,6 +2461,40 @@ paths:
         '200':
           description: Metadatos confirmados
 
+  /api/v1/collab/admin/storage/tree:
+    get:
+      summary: Obtener árbol jerárquico de almacenamiento y archivos para administración
+      tags:
+        - Storage Admin
+      responses:
+        '200':
+          description: Árbol jerárquico de clientes, proyectos y archivos
+
+  /api/v1/collab/admin/storage/files/{fileId}:
+    delete:
+      summary: Depurar/purgar un archivo de almacenamiento para liberar espacio
+      tags:
+        - Storage Admin
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Archivo purgado
+
+  /api/v1/collab/admin/storage/purge:
+    post:
+      summary: Purgar en lote archivos o carpetas para liberar cuota
+      tags:
+        - Storage Admin
+      responses:
+        '200':
+          description: Resultado del purgado en lote
+
 tags:
   - name: System
     description: Endpoints del sistema
@@ -2480,3 +2514,5 @@ tags:
     description: Archivos y entregables
   - name: Brief
     description: Brief y resumen del proyecto
+  - name: Storage Admin
+    description: Gobernanza y depuración de almacenamiento para administración
