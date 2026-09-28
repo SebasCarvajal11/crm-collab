@@ -36,6 +36,12 @@ export const STREAM_CONVENTIONS = {
       commands: "group:media.commands",
       authIdentity: "group:crm-media.auth.identity",
     },
+    marketing: {
+      collabEvents: "group:marketing.collab-events",
+    },
+    customers: {
+      authIdentity: "group:customers.auth-identity",
+    },
   },
 } as const;
 
