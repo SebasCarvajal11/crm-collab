@@ -39,9 +39,6 @@ export const STREAM_CONVENTIONS = {
     marketing: {
       collabEvents: "group:marketing.collab-events",
     },
-    customers: {
-      authIdentity: "group:customers.auth-identity",
-    },
   },
 } as const;
 
