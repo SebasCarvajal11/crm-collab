@@ -7,7 +7,7 @@
 ## Fronteras con otros servicios
 
 - **Upstream**: Ninguno (es una biblioteca compartida independiente).
-- **Downstream**: Todos los microservicios de la plataforma (`crm-auth`, `crm-collab`, `crm-media`, `crm-frontend`) que consumen sus tipos o esquemas Zod.
+- **Downstream**: Todos los microservicios de la plataforma (`crm-auth`, `crm-collab`, `crm-media`, `crm-frontend`, `crm-customers`, `crm-marketing`) que consumen sus tipos, contratos o esquemas Zod.
 - **Pares**: N/A.
 - **Recursos Compartidos**: Ninguno.
 - **Fuera de mi responsabilidad**: No implementa lógica de negocio, persistencia de datos, enrutamiento ni validación en tiempo de ejecución de las peticiones. Su único propósito es servir de catálogo estático y tipado.
@@ -99,3 +99,9 @@ To maintain a clean and decoupled architecture, the platform enforces a strict p
   - **HTTP-based Identity Hydration (Retired: 2026-05-01)**: The REST endpoint `/bootstrap-identities` in `crm-auth` and HTTP-based hydration scripts are completely removed. Restoring identity snapshots must be done via the event replay-request stream (`stream:auth.identity-replay-requests`).
   - **Static Gateway BFF Configuration (Retired: 2026-05-15)**: The legacy `bff.json` configuration in the gateway is completely retired and removed. All composition logic is handled dynamically by the frontend composition layer.
   - **Legacy Endpoints Config (Retired: 2026-06-01)**: The unvalidated `endpoints.json` files are completely replaced by validated `gateway.manifest.json` manifests.
+
+## Integration Change Gate
+
+- A contract change is complete only when its Zod schema, exported TypeScript type, compatibility catalog, tests, and release note agree.
+- Do not encode deployment assumptions in a schema. Producers and consumers must tolerate a mixed-version fleet during the documented deprecation window.
+- Service-to-service command signatures are opaque JWTs. Validation belongs to the receiving boundary; schemas validate their shape without duplicating cryptographic verification.

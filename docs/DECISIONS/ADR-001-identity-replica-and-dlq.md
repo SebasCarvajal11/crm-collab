@@ -33,8 +33,8 @@
 ## Decisión
 
 Adoptar la **Opción 3**:
-1. `crm-collab` se suscribe a `stream:auth.identity` bajo el grupo de consumo `collab-auth-consumer`.
-2. Procesa eventos `auth.user.created`, `auth.user.updated` y `auth.user.deleted` persistiendo un snapshot local con nombre, email, avatar y estado activo.
+1. `crm-collab` se suscribe a `stream:auth.identity` bajo el grupo de consumo `group:collab.auth-identity` (definido en `STREAM_CONVENTIONS`).
+2. Procesa eventos `user.registered`, `user.updated` y `user.deleted` persistiendo un snapshot local con nombre, email, avatar y estado activo.
 3. Valida esquemas usando contratos tipados (`@sebascarvajal11/cima-contracts`).
 4. Si un evento falla por error de formato o supera el umbral de reintentos (`AUTH_EVENTS_MAX_RETRIES`), se transfiere automáticamente a `schema_collab.auth_events_dlq` y se confirma en Redis (`XACK`) para no bloquear la partición.
 5. Se provee la herramienta CLI `pnpm dlq:auth:list` y `pnpm dlq:auth:replay` para diagnóstico y recuperación manual.

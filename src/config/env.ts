@@ -56,6 +56,7 @@ const envSchema = z
     COLLAB_EVENTS_MAX_RETRIES: z.coerce.number().int().min(1).max(20).default(3),
     COLLAB_EVENTS_DLQ_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.collab.eventsDlq),
     HOSTNAME: z.string().default("localhost"),
+    MEDIA_SERVICE_URL: z.string().url().default("http://crm-media:3002"),
     MEDIA_COMMANDS_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.collab.mediaCommands),
     MEDIA_RESPONSES_STREAM_KEY: z.string().default(STREAM_CONVENTIONS.streams.media.assetResponses),
     MEDIA_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(15000),

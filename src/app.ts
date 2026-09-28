@@ -17,7 +17,9 @@ import {
   httpMetricsMiddleware,
   type ServiceMetrics,
 } from "@sebascarvajal11/cima-contracts/metrics";
-import { pool } from "./db/connection";
+import { pool, db } from "./db/connection";
+import { projectFiles } from "./db/schema";
+import { eq, sql } from "drizzle-orm";
 import { getRedisConnection } from "./shared/redis";
 import { initLogger } from "./shared/logger";
 import { requestLoggerMiddleware } from "./shared/middlewares/request-logger.middleware";
@@ -86,6 +88,24 @@ export const createApp = () => {
   // --- (b) Grupo de Rutas Internas ---
   const internalRoutes = new Hono<AppEnv>();
   internalRoutes.route("/api/v1", createGatewayRoutes());
+
+  internalRoutes.get("/api/v1/internal/storage/metrics", async (c) => {
+    try {
+      const [row] = await db
+        .select({
+          count: sql<number>`count(*)::int`,
+          bytes: sql<number>`coalesce(sum(${projectFiles.sizeBytes}), 0)::bigint`,
+        })
+        .from(projectFiles)
+        .where(eq(projectFiles.isPurged, false));
+      return c.json({
+        count: Number(row?.count) || 0,
+        bytes: Number(row?.bytes) || 0,
+      });
+    } catch {
+      return c.json({ count: 0, bytes: 0 });
+    }
+  });
 
   // Ops / DLQ routes (internal only - protegidas por autenticación admin)
   const ops = new Hono<AppEnv>();

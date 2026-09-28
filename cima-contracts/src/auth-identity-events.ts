@@ -43,7 +43,7 @@ export const authIdentityEventV1Schema = z.discriminatedUnion("type", [
 // Version 2 schema
 const authIdentityEventV2BaseSchema = z.object({
   version: z.literal(2),
-  contractVersion: z.literal(AUTH_IDENTITY_EVENT_CONTRACT_VERSION).default(AUTH_IDENTITY_EVENT_CONTRACT_VERSION),
+  contractVersion: z.union([z.literal(1), z.literal(2)]).default(AUTH_IDENTITY_EVENT_CONTRACT_VERSION),
   userSub: z.string().uuid(),
   email: z.string().email(),
   role: roleSchema,

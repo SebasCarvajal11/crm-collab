@@ -1,6 +1,8 @@
 import { createPublicKey } from "node:crypto";
 import { withRetry } from "./retry";
 
+export const CANONICAL_JWT_ISSUER = "cima-crm" as const;
+
 export interface JwkEntry {
   kid: string;
   alg: string;

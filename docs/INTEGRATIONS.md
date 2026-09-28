@@ -46,16 +46,17 @@ Este documento define la topología de comunicación, los canales de mensajería
 `crm-collab` interactúa con Redis Streams como productor y consumidor mediante conexiones desacopladas y reintentos exponenciales.
 
 ### A. Consumo de Identidad (`stream:auth.identity`)
-- **Grupo de Consumo**: `collab-auth-consumer`.
+- **Grupo de Consumo**: `group:collab.auth-identity` (definido en `STREAM_CONVENTIONS`).
 - **Propósito**: Sincronizar nombres, correos, avatares y roles en la tabla local `schema_collab.user_identity_snapshots` para evitar consultas HTTP síncronas hacia `crm-auth`.
-- **Tolerancia a Fallos y DLQ**: Si un evento falla tras agotar los reintentos (`AUTH_EVENTS_MAX_RETRIES`), se redirige a la cola de mensajes muertos (*Dead Letter Queue*).
+- **Tolerancia a Fallos y DLQ**: Si un evento falla tras agotar los reintentos (`AUTH_EVENTS_MAX_RETRIES`), se redirige a `stream:collab.identity-dlq`.
 - **Herramienta Operativa CLI**:
   - `pnpm dlq:auth:list`: Inspecciona eventos fallidos en DLQ.
   - `pnpm dlq:auth:replay`: Reintenta el procesamiento de mensajes recuperados.
 
-### B. Comandos hacia Media (`stream:collab.media-commands`)
+### B. Comandos hacia Media (`stream:collab.media-commands` y `stream:media.asset-responses`)
 - **Propósito**: Solicitar a `crm-media` la generación de URLs firmadas para subida, descarga o purga de archivos adjuntos.
-- **Autenticación Máquina a Máquina**: Los comandos viajan autenticados mediante un Service JWT firmado con algoritmo `RS256`. `crm-media` valida la firma consultando el JWKS público en `http://crm-collab:3002/api/v1/.well-known/service-jwks.json`.
+- **Consumer Group de Respuestas**: `group:collab.media-responses`.
+- **Autenticación Máquina a Máquina**: Los comandos viajan autenticados mediante un Service JWT firmado con algoritmo `RS256`. `crm-media` valida la firma consultando el JWKS público en `http://crm-collab:3001/api/v1/.well-known/service-jwks.json`.
 - **Resiliencia**: Utiliza un cliente con *Circuit Breaker* en memoria para no saturar Redis si el servicio de medios experimenta degradación.
 
 ### C. Publicación de Eventos de Dominio (`stream:collab.events`)
@@ -67,10 +68,10 @@ Este documento define la topología de comunicación, los canales de mensajería
 
 ## 3. Integración con KrakenD API Gateway
 
-- **Manifiesto de Rutas**: [`gateway/gateway.manifest.json`](file:///d:/BACKUP%20CELULAR%20OLIMPO/crm-collab/gateway/gateway.manifest.json).
+- **Manifiesto de Rutas**: [`gateway/gateway.manifest.json`](../gateway/gateway.manifest.json).
 - **Propagación de Contexto**: KrakenD valida el Access Token del usuario y envía a `crm-collab` los encabezados de identidad confiable:
   - `X-User-Id`: UUID del usuario autenticado.
-  - `X-User-Role`: Rol global (`superadmin`, `gerente`, `worker`, `cliente`).
+  - `X-User-Role`: Rol canónico CIMA (`admin`, `worker`, `client`).
   - `X-Trace-Id` / `X-Correlation-Id`: Identificadores únicos para observabilidad distribuida.
 - **Circuit Breaker y Health**: KrakenD audita la disponibilidad en `GET /api/v1/health`. Tras 3 fallos consecutivos en una ventana de 60 segundos, conmuta el tráfico temporalmente.
 

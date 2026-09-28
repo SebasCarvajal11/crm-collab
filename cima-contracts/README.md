@@ -51,6 +51,8 @@ Configurar `.npmrc` en el servicio consumidor:
 | `@.../cima-contracts/auth-identity-events` | Schemas de eventos de identidad |
 | `@.../cima-contracts/collab-project-events` | Schemas de eventos de proyectos |
 | `@.../cima-contracts/media-asset-events` | Schemas de comandos y respuestas de media |
+| `@.../cima-contracts/email-dispatch` | Contrato estricto de despacho de correo a Media |
+| `@.../cima-contracts/error-catalog` | Catálogo de errores normalizados (`NormalizedError`) |
 
 ## Desarrollo local
 
@@ -79,3 +81,12 @@ La publicación es automática al crear un tag `v*` en GitHub. El CI ejecuta `pn
 | `RATE_LIMIT_EXCEEDED` | 429 | Límite de requests excedido |
 | `DEPENDENCY_FAILED` | 503 | Dependencia upstream/downstream falló |
 | `INTERNAL_SERVER_ERROR` | 500 | Error no manejado |
+
+## Integración sostenible
+
+Los contratos son el límite de integración entre equipos. Antes de publicar un cambio:
+
+1. Mantener compatibilidad aditiva dentro del mismo major; un cambio incompatible crea una nueva versión del evento o API.
+2. Actualizar el schema Zod, los tipos exportados y las pruebas del paquete en el mismo cambio.
+3. Publicar primero el productor en modo expand, después actualizar consumidores y retirar la versión anterior solo tras observar consumo cero durante la ventana de deprecación.
+4. No usar copias locales ni artefactos `.tgz` como dependencia de despliegue: CI y producción consumen una versión publicada y fijada.

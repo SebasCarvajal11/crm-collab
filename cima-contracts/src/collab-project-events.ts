@@ -14,6 +14,7 @@ export const collabEventTypeSchema = z.enum([
   "task.assigned",
   "task.blocked",
   "task.unblocked",
+  "task.comment.created",
   "chat.message.internal",
   "chat.message.external",
   "chat.mention",
@@ -119,6 +120,7 @@ export const fileApprovedEventSchema = z.object({
 });
 
 export const collabEventSchema = z.object({
+  id: z.string().uuid().optional(),
   version: z.literal(1).default(1),
   contractVersion: z.union([z.literal(1), z.literal(COLLAB_EVENT_CONTRACT_VERSION)]).default(COLLAB_EVENT_CONTRACT_VERSION),
   type: collabEventTypeSchema,

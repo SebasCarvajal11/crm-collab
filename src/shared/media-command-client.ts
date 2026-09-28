@@ -3,7 +3,6 @@ import { and, eq, gt, sql } from "drizzle-orm";
 import { env } from "../config/env";
 import { db } from "../db/connection";
 import { mediaAccessCache } from "../db/schema";
-import { createRedisStreamConsumerConnection, getRedisConnection } from "./redis";
 import { AppError } from "./middlewares/error-handler.middleware";
 import { getLogger, traceStorage } from "./logger";
 import { signServiceJwt } from "../config/jwt";
@@ -31,50 +30,14 @@ export type {
 };
 export { SimpleCircuitBreaker, mediaCircuitBreaker };
 
-const pendingResponses = new Map<string, PendingResponse>();
-let responseLoopStarted = false;
-let responseLoopRunning = false;
-let responseLoopPromise: Promise<void> | null = null;
-let responseRedis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>> | undefined;
-let responseLastId = "$";
-
 const CACHE_SAFETY_WINDOW_MS = 15_000;
 
 export async function startMediaResponseConsumer(): Promise<void> {
-  if (responseLoopStarted) return;
-  responseLoopStarted = true;
-
-  const redis = createRedisStreamConsumerConnection();
-  if (!redis) {
-    logger.warn("[media-command-client] Redis no disponible; respuestas de media deshabilitadas");
-    return;
-  }
-
-  responseRedis = redis;
-  responseLoopRunning = true;
-  responseLoopPromise = readMediaResponses(redis);
+  // No-op: Comandos de media ahora se resuelven síncronamente vía HTTP M2M (ADR-007)
 }
 
 export async function stopMediaResponseConsumer(): Promise<void> {
-  responseLoopRunning = false;
-  const loopPromise = responseLoopPromise;
-  responseRedis?.disconnect();
-  responseRedis = undefined;
-  responseLoopPromise = null;
-  responseLoopStarted = false;
-
-  if (loopPromise) {
-    await Promise.race([
-      loopPromise,
-      new Promise<void>((resolve) => setTimeout(resolve, 3000)),
-    ]);
-  }
-
-  for (const [correlationId, pending] of pendingResponses) {
-    clearTimeout(pending.timer);
-    pending.reject(new Error(`media response consumer stopped before ${correlationId}`));
-  }
-  pendingResponses.clear();
+  // No-op: Comandos de media ahora se resuelven síncronamente vía HTTP M2M (ADR-007)
 }
 
 export async function getMediaDocumentAccessUrl(
@@ -188,59 +151,45 @@ async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<M
     throw new AppError(503, "El circuito esta abierto: el servicio crm-media no esta disponible");
   }
 
-  const redis = getRedisConnection();
-  if (!redis) {
-    mediaCircuitBreaker.recordFailure();
-    throw new AppError(503, "Redis no disponible para comandos de media");
-  }
-
-  await startMediaResponseConsumer();
-  if (!responseLoopRunning) {
-    mediaCircuitBreaker.recordFailure();
-    throw new AppError(503, "Consumidor de respuestas de media no disponible");
-  }
-
-  const promise = new Promise<MediaCommandResponse>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      pendingResponses.delete(command.correlationId);
-      reject(new AppError(504, "Tiempo de espera agotado esperando respuesta de media"));
-    }, env.MEDIA_COMMAND_TIMEOUT_MS);
-
-    pendingResponses.set(command.correlationId, { resolve, reject, timer });
-  });
-
   const store = traceStorage.getStore();
   if (store?.traceId) {
     command.traceId = store.traceId;
   }
 
   const signedCommand = signMediaCommand(command);
+  const mediaBase = (env.MEDIA_SERVICE_URL || "http://crm-media:3002").replace(/\/$/, "");
 
   try {
-    await redis.xadd(
-      env.MEDIA_COMMANDS_STREAM_KEY,
-      "*",
-      "payload",
-      JSON.stringify(signedCommand),
-    );
-    const res = await promise;
+    const res = await fetch(`${mediaBase}/api/v1/internal/documents/command`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(command.traceId ? { "x-trace-id": command.traceId } : {}),
+      },
+      body: JSON.stringify(signedCommand),
+      signal: AbortSignal.timeout(env.MEDIA_COMMAND_TIMEOUT_MS),
+    });
 
-    if (res.type === "file.command-failed" && res.statusCode >= 500) {
+    const json = await res.json();
+    const parsed = mediaResponseSchema.safeParse(json);
+    if (!parsed.success) {
+      mediaCircuitBreaker.recordFailure();
+      throw new AppError(502, "Respuesta de media no cumple schema");
+    }
+
+    const response = parsed.data as MediaCommandResponse;
+    if (response.type === "file.command-failed" && response.statusCode >= 500) {
       mediaCircuitBreaker.recordFailure();
     } else {
       mediaCircuitBreaker.recordSuccess();
     }
 
-    return res;
+    return response;
   } catch (error) {
     mediaCircuitBreaker.recordFailure();
-
-    const pending = pendingResponses.get(command.correlationId);
-    if (pending) {
-      clearTimeout(pending.timer);
-      pendingResponses.delete(command.correlationId);
-    }
-    throw error;
+    if (error instanceof AppError) throw error;
+    const message = error instanceof Error ? error.message : "Fallo de comunicación con crm-media";
+    throw new AppError(503, message);
   }
 }
 
@@ -258,84 +207,6 @@ function signMediaCommand(command: UnsignedMediaCommandRequest): MediaCommandReq
   };
   const signature = signServiceJwt(jwtPayload);
   return { ...command, signature };
-}
-
-async function readMediaResponses(redis: NonNullable<ReturnType<typeof createRedisStreamConsumerConnection>>) {
-  while (responseLoopRunning) {
-    try {
-      const results = (await redis.xread(
-        "COUNT",
-        25,
-        "BLOCK",
-        5000,
-        "STREAMS",
-        env.MEDIA_RESPONSES_STREAM_KEY,
-        responseLastId,
-      )) as any[] | null;
-
-      if (!results?.length) continue;
-
-      for (const [, messages] of results) {
-        for (const [messageId, fields] of messages ?? []) {
-          responseLastId = messageId;
-          const fieldMap = streamFieldsToMap(fields as string[]);
-          if (fieldMap.get("__shutdown__") === "1") {
-            continue;
-          }
-
-          const payload = fieldMap.get("payload");
-          if (!payload) {
-            continue;
-          }
-
-          let response: MediaCommandResponse | null = null;
-          try {
-            const raw = JSON.parse(payload);
-            const result = mediaResponseSchema.safeParse(raw);
-            if (result.success) {
-              response = result.data as MediaCommandResponse;
-            } else {
-              logger.warn(
-                { messageId, issues: result.error.issues },
-                "[media-command-client] Respuesta de media no cumple schema",
-              );
-            }
-          } catch {
-            logger.warn({ messageId }, "[media-command-client] Respuesta invalida (JSON parse error)");
-          }
-
-          if (response?.correlationId) {
-            const traceId = (response as any).traceId;
-            const action = async () => {
-              const pending = pendingResponses.get(response!.correlationId);
-              if (pending) {
-                clearTimeout(pending.timer);
-                pendingResponses.delete(response!.correlationId);
-                pending.resolve(response!);
-              }
-            };
-            if (traceId) {
-              await traceStorage.run({ traceId }, action);
-            } else {
-              await action();
-            }
-          }
-        }
-      }
-    } catch (err) {
-      if (!responseLoopRunning) break;
-      logger.error({ err }, "[media-command-client] Error leyendo respuestas de media");
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
-  }
-}
-
-function streamFieldsToMap(fields: string[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (let i = 0; i < fields.length - 1; i += 2) {
-    map.set(fields[i], fields[i + 1]);
-  }
-  return map;
 }
 
 async function getCachedAccessUrl(objectKey: string, forceDownload: boolean) {

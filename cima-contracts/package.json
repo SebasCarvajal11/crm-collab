@@ -90,6 +90,18 @@
     "./hono-auth-middleware": {
       "types": "./dist/hono-auth-middleware.d.ts",
       "default": "./dist/hono-auth-middleware.js"
+    },
+    "./email-dispatch": {
+      "types": "./dist/email-dispatch.d.ts",
+      "default": "./dist/email-dispatch.js"
+    },
+    "./error-catalog": {
+      "types": "./dist/error-catalog.d.ts",
+      "default": "./dist/error-catalog.js"
+    },
+    "./retry": {
+      "types": "./dist/retry.d.ts",
+      "default": "./dist/retry.js"
     }
   },
   "files": [
@@ -99,6 +111,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "sync": "node scripts/sync-vendored.mjs",
     "test": "tsc --noEmit -p tsconfig.json",
     "prepare": "pnpm build",
     "prepublishOnly": "pnpm test && pnpm build",

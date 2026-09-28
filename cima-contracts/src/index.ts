@@ -21,3 +21,4 @@ export * from "./gateway-manifest";
 
 
 
+export * from "./email-dispatch";

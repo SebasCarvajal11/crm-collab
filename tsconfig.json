@@ -9,5 +9,6 @@
     "types": ["node"],
     "outDir": "./dist"
   },
-  "exclude": ["node_modules"]
+  "include": ["src", "drizzle.config.ts"],
+  "exclude": ["node_modules", "cima-contracts", "dist"]
 }
