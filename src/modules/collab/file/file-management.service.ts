@@ -87,7 +87,16 @@ export const createFileManagementService = (
       const file = await fileRepository.findFileById(fileId);
       if (!file) throw new NotFoundError("Archivo no encontrado");
       if (file.isPurged) {
-        throw new BadRequestError("El archivo ha sido depurado por administración para liberar espacio de almacenamiento");
+        throw new BadRequestError(
+          "El archivo ha sido depurado por administración para liberar espacio de almacenamiento",
+          {
+            code: "FILE_PURGED",
+            fileId: file.id,
+            fileName: file.fileName,
+            purgedAt: file.purgedAt,
+            purgedReason: file.purgedReason,
+          }
+        );
       }
       const { member } = await assertProjectAccess(accessRepo, actor, file.projectId);
       if ((actor.role === "client" || member?.role === "client") && !file.isClientVisible) {

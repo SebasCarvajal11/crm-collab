@@ -7,26 +7,8 @@ import {
 } from "../../../db/schema";
 import type {
   NewProject,
+  ProjectTimelineItemRow,
 } from "../collab.types";
-
-type ProjectTimelineItemRow = {
-  id: string;
-  kind: "file" | "task_completed" | "change_accepted" | "change_rejected";
-  label: "Archivo" | "Tarea finalizada" | "Cambio aceptado" | "Cambio rechazado";
-  title: string;
-  occurredAt: Date;
-  fileId: string | null;
-  fileName: string | null;
-  mimeType: string | null;
-  taskId: string | null;
-  changeRequestId: string | null;
-  createdBySub: string | null;
-  createdByEmail: string | null;
-  requestedBySub?: string | null;
-  resolvedBySub?: string | null;
-  resolutionComment?: string | null;
-  isClientVisible: boolean;
-};
 
 type ProjectSearchResult = {
   id: string;
@@ -257,7 +239,10 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         f.is_client_visible AS "isClientVisible",
         NULL::uuid AS "requestedBySub",
         NULL::uuid AS "resolvedBySub",
-        NULL::text AS "resolutionComment"
+        NULL::text AS "resolutionComment",
+        f.is_purged AS "isPurged",
+        f.purged_at AS "purgedAt",
+        f.purged_reason AS "purgedReason"
       FROM schema_collab.project_files f
       WHERE f.project_id = ${projectId}
         AND (${isClientView} = false OR f.is_client_visible = true)
@@ -280,7 +265,10 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         t.is_client_visible AS "isClientVisible",
         NULL::uuid AS "requestedBySub",
         NULL::uuid AS "resolvedBySub",
-        NULL::text AS "resolutionComment"
+        NULL::text AS "resolutionComment",
+        false AS "isPurged",
+        NULL::timestamp AS "purgedAt",
+        NULL::varchar AS "purgedReason"
       FROM schema_collab.project_tasks t
       INNER JOIN schema_collab.project_task_columns c ON c.id = t.column_id
       WHERE t.project_id = ${projectId}
@@ -312,7 +300,10 @@ export const createProjectRepository = (conn: DbOrTx) => ({
         COALESCE(t.is_client_visible, true) AS "isClientVisible",
         cr.requested_by_sub AS "requestedBySub",
         cr.resolved_by_sub AS "resolvedBySub",
-        cr.resolution_comment AS "resolutionComment"
+        cr.resolution_comment AS "resolutionComment",
+        false AS "isPurged",
+        NULL::timestamp AS "purgedAt",
+        NULL::varchar AS "purgedReason"
       FROM schema_collab.project_change_requests cr
       LEFT JOIN schema_collab.project_tasks t ON t.id = cr.task_id
       WHERE cr.project_id = ${projectId}

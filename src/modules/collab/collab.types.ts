@@ -63,3 +63,25 @@ export type ProjectFileEnriched = ProjectFile & {
   taskTitle?: string | null;
   currentColumnTitle?: string | null;
 };
+
+export type ProjectTimelineItemRow = {
+  id: string;
+  kind: "file" | "task_completed" | "change_accepted" | "change_rejected";
+  label: "Archivo" | "Tarea finalizada" | "Cambio aceptado" | "Cambio rechazado";
+  title: string;
+  occurredAt: Date;
+  fileId: string | null;
+  fileName: string | null;
+  mimeType: string | null;
+  taskId: string | null;
+  changeRequestId: string | null;
+  createdBySub: string | null;
+  createdByEmail: string | null;
+  requestedBySub?: string | null;
+  resolvedBySub?: string | null;
+  resolutionComment?: string | null;
+  isClientVisible: boolean;
+  isPurged?: boolean;
+  purgedAt?: Date | null;
+  purgedReason?: string | null;
+};
