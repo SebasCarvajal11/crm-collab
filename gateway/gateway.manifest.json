@@ -7,6 +7,7 @@
       "method": "GET",
       "backend_url": "/api/v1/.well-known/service-jwks.json",
       "public": true,
+      "cache_ttl": "300s",
       "openapi_ref": "GET /api/v1/.well-known/service-jwks.json"
     },
     {
@@ -14,6 +15,7 @@
       "method": "GET",
       "backend_url": "/api/v1/openapi.yaml",
       "public": true,
+      "cache_ttl": "300s",
       "openapi_ref": "GET /api/v1/openapi.yaml"
     },
     {
@@ -21,6 +23,7 @@
       "method": "GET",
       "backend_url": "/api/v1/openapi.yaml",
       "public": true,
+      "cache_ttl": "300s",
       "openapi_ref": "GET /api/v1/openapi.yaml"
     },
     {
