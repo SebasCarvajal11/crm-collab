@@ -68,7 +68,7 @@ export const createMemberService = (
 
     listProjectMembers: async (actor: Actor, projectId: string) => {
       await assertProjectAccess(accessRepo, actor, projectId);
-      await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
+      void memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       const [members, assignees, taskCounts] = await Promise.all([
         memberRepository.listProjectMembers(projectId),
         boardRepository.listTaskAssigneesByProject(projectId),

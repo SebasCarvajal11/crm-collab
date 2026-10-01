@@ -14,7 +14,7 @@ const envSchema = z
   .object({
     DATABASE_URL: z.string().min(1, "DATABASE_URL es requerida"),
     DB_SCHEMA: z.literal("schema_collab"),
-    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(20),
+    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(35),
     DB_POOL_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(600_000).default(30_000),
     DB_POOL_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(5_000),
     DB_POOL_MAX_LIFETIME_SECONDS: z.coerce.number().int().min(60).max(86_400).default(1_800),

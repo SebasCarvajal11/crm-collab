@@ -44,18 +44,21 @@ export const createChatService = (
       channel: "internal" | "external",
       query: { page: number; limit: number }
     ) => {
-      const { member } = await assertProjectAccess(accessRepo, actor, projectId);
+      const [{ member }, { rows: messages, total }, members] = await Promise.all([
+        assertProjectAccess(accessRepo, actor, projectId),
+        chatRepository.listChatMessagesByChannel({
+          projectId,
+          channel,
+          limit: query.limit,
+          offset: (query.page - 1) * query.limit,
+        }),
+        memberRepository.listProjectMembers(projectId),
+      ]);
+
       if (channel === "internal" && !canInternalChat(actor.role, member?.role)) {
         throw new ForbiddenError("No tienes acceso al chat interno");
       }
-      const { rows: messages, total } = await chatRepository.listChatMessagesByChannel({
-        projectId,
-        channel,
-        limit: query.limit,
-        offset: (query.page - 1) * query.limit,
-      });
 
-      const members = await memberRepository.listProjectMembers(projectId);
       const reads = await chatRepository.listChatReadsByMessages(messages.map((m) => m.id));
       const authorSubs = messages.map((m) => m.authorSub).filter((s): s is string => Boolean(s));
       const readerSubs = reads.map((r) => r.userSub);

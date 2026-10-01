@@ -89,7 +89,6 @@ export async function getUserProfilesFromSnapshots(
   }
 
   const now = Date.now();
-  purgeExpiredProfileCache(now);
   const missingAfterCache: string[] = [];
 
   for (const sub of uniqueSubs) {

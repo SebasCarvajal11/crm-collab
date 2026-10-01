@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { authMiddleware, type AppEnv } from "../../shared/middlewares/auth.middleware";
+import { type AppEnv } from "../../shared/middlewares/auth.middleware";
 import { collabWriteRateLimit } from "../../shared/middlewares/rate-limit.middleware";
 import { projectRoutes } from "./project/project.routes";
 import { memberRoutes } from "./member/member.routes";
@@ -13,7 +13,6 @@ import { contractRoutes } from "./contract/contract.routes";
 import { adminStorageRoutes } from "./admin-storage/admin-storage.routes";
 
 export const collabModuleRoutes = new Hono<AppEnv>();
-collabModuleRoutes.use("*", authMiddleware);
 collabModuleRoutes.use("*", collabWriteRateLimit());
 collabModuleRoutes.route("/", projectRoutes);
 collabModuleRoutes.route("/", memberRoutes);

@@ -190,7 +190,7 @@ export const createProjectService = (
 
     getProject: async (actor: Actor, projectId: string) => {
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
-      await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
+      void memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       return project;
     },
 
@@ -251,7 +251,7 @@ export const createProjectService = (
 
     getProjectWorkspace: async (actor: Actor, projectId: string) => {
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
-      await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
+      void memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       const isClient = actor.role === "client";
       const [members, columns, tasks, brief, formalChanges, assignees, taskCounts] = await Promise.all([
         memberRepository.listProjectMembers(projectId),
@@ -302,7 +302,7 @@ export const createProjectService = (
 
     getProjectBoard: async (actor: Actor, projectId: string) => {
       const { project } = await assertProjectAccess(accessRepo, actor, projectId);
-      await memberRepository.touchProjectMemberActivity(projectId, actor.sub);
+      void memberRepository.touchProjectMemberActivity(projectId, actor.sub);
       const isClient = actor.role === "client";
       const [members, columns, tasks, assignees, taskCounts] = await Promise.all([
         memberRepository.listProjectMembers(projectId),

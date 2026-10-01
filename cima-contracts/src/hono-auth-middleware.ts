@@ -52,12 +52,59 @@ const decodeJwtHeader = (token: string): { kid?: string; alg?: string } => {
   }
 };
 
+interface CachedTokenVerification {
+  payload: JwtPayload;
+  expiresAt: number;
+}
+
+const publicKeyCache = new Map<string, import("node:crypto").KeyObject>();
+const tokenVerificationCache = new Map<string, CachedTokenVerification>();
+const MAX_TOKEN_CACHE_SIZE = 1000;
+const MAX_TOKEN_CACHE_TTL_MS = 60 * 1000;
+
+const getOrCreatePublicKey = async (
+  pem: string
+): Promise<import("node:crypto").KeyObject> => {
+  const cached = publicKeyCache.get(pem);
+  if (cached) return cached;
+  const { createPublicKey } = await import("node:crypto");
+  const key = createPublicKey(pem);
+  publicKeyCache.set(pem, key);
+  return key;
+};
+
+const getCachedVerifiedPayload = (token: string): JwtPayload | null => {
+  const cached = tokenVerificationCache.get(token);
+  if (!cached) return null;
+  if (Date.now() > cached.expiresAt) {
+    tokenVerificationCache.delete(token);
+    return null;
+  }
+  return cached.payload;
+};
+
+const setCachedVerifiedPayload = (token: string, payload: JwtPayload): void => {
+  if (tokenVerificationCache.size >= MAX_TOKEN_CACHE_SIZE) {
+    const firstKey = tokenVerificationCache.keys().next().value;
+    if (firstKey) tokenVerificationCache.delete(firstKey);
+  }
+  const now = Date.now();
+  const expMs = (payload.exp ?? 0) * 1000;
+  const ttlMs = Math.min(Math.max(expMs - now, 0), MAX_TOKEN_CACHE_TTL_MS);
+  if (ttlMs > 0) {
+    tokenVerificationCache.set(token, { payload, expiresAt: now + ttlMs });
+  }
+};
+
 const verifyRs256 = async (
   token: string,
   publicKeyPem: string,
   expectedIss?: string
 ): Promise<JwtPayload> => {
-  const { createVerify, createPublicKey } = await import("node:crypto");
+  const cached = getCachedVerifiedPayload(token);
+  if (cached) return cached;
+
+  const { createVerify } = await import("node:crypto");
   const [headerB64, payloadB64, signatureB64] = token.split(".");
   if (!headerB64 || !payloadB64 || !signatureB64) {
     throw new Error("Token JWT malformado");
@@ -75,7 +122,7 @@ const verifyRs256 = async (
     throw new Error("Issuer no coincide");
   }
 
-  const key = createPublicKey(publicKeyPem);
+  const key = await getOrCreatePublicKey(publicKeyPem);
   const verifier = createVerify("RSA-SHA256");
   verifier.update(`${headerB64}.${payloadB64}`);
   const valid = verifier.verify(
@@ -84,6 +131,7 @@ const verifyRs256 = async (
   );
   if (!valid) throw new Error("Firma JWT inválida");
 
+  setCachedVerifiedPayload(token, payload);
   return payload;
 };
 
@@ -122,6 +170,11 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   };
 
   return createMiddleware<AppEnv>(async (c, next) => {
+    if (c.get("user")) {
+      await next();
+      return;
+    }
+
     const authHeader = c.req.header("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       throw new AppError(401, "Se requiere un token de autorización");

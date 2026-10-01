@@ -3,6 +3,17 @@ import { and, asc, eq, isNull, lt, or } from "drizzle-orm";
 import { projectMembers } from "../../../db/schema";
 import type { NewProjectMember } from "../collab.types";
 
+const recentActivityTouchMap = new Map<string, number>();
+
+function pruneRecentActivityTouchMap(nowMs: number): void {
+  const cutoff = nowMs - 5 * 60 * 1000;
+  for (const [key, timestamp] of recentActivityTouchMap) {
+    if (timestamp < cutoff) {
+      recentActivityTouchMap.delete(key);
+    }
+  }
+}
+
 export const createMemberRepository = (conn: DbOrTx) => ({
   createProjectMember: async (payload: NewProjectMember) => {
     const [row] = await conn.insert(projectMembers).values(payload).returning();
@@ -38,8 +49,18 @@ export const createMemberRepository = (conn: DbOrTx) => ({
   },
 
   touchProjectMemberActivity: async (projectId: string, userSub: string) => {
-    const now = new Date();
-    const staleAt = new Date(now.getTime() - 5 * 60 * 1000);
+    const key = `${projectId}:${userSub}`;
+    const lastTouched = recentActivityTouchMap.get(key) ?? 0;
+    const nowMs = Date.now();
+    if (nowMs - lastTouched < 5 * 60 * 1000) return;
+
+    recentActivityTouchMap.set(key, nowMs);
+    if (recentActivityTouchMap.size > 5000) {
+      pruneRecentActivityTouchMap(nowMs);
+    }
+
+    const now = new Date(nowMs);
+    const staleAt = new Date(nowMs - 5 * 60 * 1000);
     await conn
       .update(projectMembers)
       .set({ lastSeenAt: now, updatedAt: now })

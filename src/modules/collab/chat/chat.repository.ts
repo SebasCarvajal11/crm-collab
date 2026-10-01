@@ -28,18 +28,16 @@ export const createChatRepository = (conn: DbOrTx) => ({
       eq(projectChatMessages.channel, opts.channel)
     );
 
-    const [totalCount] = await conn
-      .select({ count: count() })
-      .from(projectChatMessages)
-      .where(filters);
-
-    const messages = await conn
-      .select()
-      .from(projectChatMessages)
-      .where(filters)
-      .orderBy(desc(projectChatMessages.createdAt))
-      .limit(opts.limit)
-      .offset(opts.offset);
+    const [[totalCount], messages] = await Promise.all([
+      conn.select({ count: count() }).from(projectChatMessages).where(filters),
+      conn
+        .select()
+        .from(projectChatMessages)
+        .where(filters)
+        .orderBy(desc(projectChatMessages.createdAt))
+        .limit(opts.limit)
+        .offset(opts.offset),
+    ]);
 
     if (!messages.length) return { rows: [], total: totalCount?.count ?? 0 };
 

@@ -101,18 +101,16 @@ export const createProjectRepository = (conn: DbOrTx) => ({
           filters
         );
 
-    const [totalCount] = await conn
-      .select({ count: count() })
-      .from(projects)
-      .where(scopedFilters);
-
-    const rows = await conn
-      .select()
-      .from(projects)
-      .where(scopedFilters)
-      .orderBy(desc(projects.updatedAt))
-      .limit(opts.limit)
-      .offset(opts.offset);
+    const [[totalCount], rows] = await Promise.all([
+      conn.select({ count: count() }).from(projects).where(scopedFilters),
+      conn
+        .select()
+        .from(projects)
+        .where(scopedFilters)
+        .orderBy(desc(projects.updatedAt))
+        .limit(opts.limit)
+        .offset(opts.offset),
+    ]);
 
     return { rows, total: totalCount?.count ?? 0 };
   },

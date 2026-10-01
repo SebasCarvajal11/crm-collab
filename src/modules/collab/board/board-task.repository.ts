@@ -35,18 +35,16 @@ export const createBoardTaskRepository = (conn: DbOrTx) => ({
       opts.isClientVisible !== undefined ? eq(projectTasks.isClientVisible, opts.isClientVisible) : undefined,
     );
 
-    const [totalCount] = await conn
-      .select({ count: count() })
-      .from(projectTasks)
-      .where(filters);
-
-    const tasks = await conn
-      .select()
-      .from(projectTasks)
-      .where(filters)
-      .orderBy(asc(projectTasks.position), asc(projectTasks.createdAt))
-      .limit(opts.limit)
-      .offset(opts.offset);
+    const [[totalCount], tasks] = await Promise.all([
+      conn.select({ count: count() }).from(projectTasks).where(filters),
+      conn
+        .select()
+        .from(projectTasks)
+        .where(filters)
+        .orderBy(asc(projectTasks.position), asc(projectTasks.createdAt))
+        .limit(opts.limit)
+        .offset(opts.offset),
+    ]);
 
     if (!tasks.length) return { rows: [], total: totalCount?.count ?? 0 };
 
