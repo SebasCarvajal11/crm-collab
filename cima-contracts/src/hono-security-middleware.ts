@@ -49,3 +49,39 @@ export const securityHeadersMiddleware = createMiddleware(async (c, next) => {
 
   await next();
 });
+
+export type HeaderGetter =
+  | { req: { header: (name: string) => string | undefined } }
+  | ((name: string) => string | undefined | null)
+  | Headers;
+
+/**
+ * Obtiene de forma confiable la IP del cliente mitigando IP Spoofing.
+ * Prioriza X-Real-IP del proxy de borde y toma el ultimo salto de X-Forwarded-For.
+ */
+export function getTrustedClientIp(source: HeaderGetter): string {
+  const get = (name: string): string | undefined => {
+    if (typeof source === "function") return source(name) ?? undefined;
+    if ("req" in source && typeof source.req.header === "function") {
+      return source.req.header(name);
+    }
+    if (source instanceof Headers) return source.get(name) ?? undefined;
+    return undefined;
+  };
+
+  const realIp = get("x-real-ip")?.trim();
+  if (realIp && realIp.toLowerCase() !== "unknown") return realIp;
+
+  const cfIp = get("cf-connecting-ip")?.trim();
+  if (cfIp && cfIp.toLowerCase() !== "unknown") return cfIp;
+
+  const xff = get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((p) => p.trim()).filter(Boolean);
+    const last = parts.pop();
+    if (last && last.toLowerCase() !== "unknown") return last;
+  }
+
+  return "unknown";
+}
+

@@ -99,6 +99,10 @@
       "types": "./dist/error-catalog.d.ts",
       "default": "./dist/error-catalog.js"
     },
+    "./token-blocklist": {
+      "types": "./dist/token-blocklist.d.ts",
+      "default": "./dist/token-blocklist.js"
+    },
     "./retry": {
       "types": "./dist/retry.d.ts",
       "default": "./dist/retry.js"
@@ -146,7 +150,7 @@
     "@types/node": "^22.13.0",
     "typescript": "^5.8.3",
     "zod": "^4.4.3",
-    "hono": "^4.12.18",
+    "hono": "^4.13.12",
     "pino": "^9.0.0",
     "ioredis": "^5.0.0",
     "prom-client": "^15.1.3"

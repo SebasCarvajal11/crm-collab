@@ -10,11 +10,7 @@ import type {
 } from "../collab.schemas";
 import type { createProjectService } from "./project.service";
 
-const getIp = (c: Context) =>
-  c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-  c.req.header("x-real-ip")?.trim() ??
-  "unknown";
-const getUa = (c: Context) => c.req.header("user-agent") ?? "unknown";
+import { getIp, getUa } from "../../../shared/request-context";
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
 
 export const createProjectController = (service: ReturnType<typeof createProjectService>) => ({

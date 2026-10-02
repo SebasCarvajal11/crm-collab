@@ -5,6 +5,7 @@ import { AppError } from "./error-handler.middleware";
 import { getRedisConnection } from "../redis";
 import { getLogger } from "../logger";
 import { env } from "../../config/env";
+import { getTrustedClientIp } from "@sebascarvajal11/cima-contracts/hono-security-middleware";
 
 const logger = getLogger();
 
@@ -123,8 +124,7 @@ export function collabWriteRateLimit() {
     const userKey =
       c.req.header("x-user-id")?.trim() ||
       c.req.header("x-user-sub")?.trim() ||
-      c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+      getTrustedClientIp(c);
     const route = matchedWriteRoute(c);
     const opts = resolveWriteLimit(route, method);
     const bucketKey = `${method}:${route}:${userKey}`;

@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import { getLogger } from "./logger";
 import { JwksClient } from "./jwks";
 import { AppError } from "./hono-error-handler-middleware";
+import { isTokenRevoked, isUserRevoked } from "./token-blocklist";
 
 const logger = getLogger();
 
@@ -16,6 +17,7 @@ export interface JwtPayload {
   iat?: number;
   iss?: string;
   kid?: string;
+  force_password_change?: boolean;
 }
 
 export type AppEnv = {
@@ -33,6 +35,8 @@ export interface AuthMiddlewareConfig {
   jwksCacheTtlMs?: number;
   /** Expected issuer claim. */
   jwtIss?: string;
+  /** Si true (default), verifica en Redis si el token o usuario fue revocado. */
+  checkTokenBlocklist?: boolean;
 }
 
 const normalizePem = (pem: string) => pem.replace(/\\n/g, "\n").trim();
@@ -192,6 +196,21 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
       ) {
         throw new AppError(401, "Claims JWT incompletos");
       }
+      if (config.checkTokenBlocklist !== false) {
+        const revoked = await isTokenRevoked(token);
+        if (revoked) {
+          tokenVerificationCache.delete(token);
+          throw new AppError(401, "Token revocado o sesión finalizada");
+        }
+        if (payload.userId && payload.iat) {
+          const userRevoked = await isUserRevoked(payload.userId, payload.iat);
+          if (userRevoked) {
+            tokenVerificationCache.delete(token);
+            throw new AppError(401, "Sesión revocada para este usuario");
+          }
+        }
+      }
+
       c.set("user", payload);
       await next();
     } catch (err) {
@@ -202,6 +221,10 @@ export function createAuthMiddleware(config: AuthMiddlewareConfig) {
   });
 }
 
+export const invalidateTokenCache = (token: string): void => {
+  tokenVerificationCache.delete(token);
+};
+
 export const requireRole = (...roles: GlobalRole[]) =>
   createMiddleware<AppEnv>(async (c, next) => {
     const user = c.get("user");
@@ -210,3 +233,11 @@ export const requireRole = (...roles: GlobalRole[]) =>
     }
     await next();
   });
+
+export {
+  revokeToken,
+  isTokenRevoked,
+  revokeUserSessions,
+  isUserRevoked,
+  computeTokenHash,
+} from "./token-blocklist";

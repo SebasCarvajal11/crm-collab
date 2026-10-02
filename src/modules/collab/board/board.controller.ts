@@ -14,12 +14,8 @@ import type {
   UnblockTaskBody,
 } from "../collab.schemas";
 import type { createBoardService } from "./board.service";
+import { getIp, getUa } from "../../../shared/request-context";
 
-const getIp = (c: Context) =>
-  c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
-  c.req.header("x-real-ip")?.trim() ??
-  "unknown";
-const getUa = (c: Context) => c.req.header("user-agent") ?? "unknown";
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
 const mapColumn = (col: any) => {
   if (!col) return col;

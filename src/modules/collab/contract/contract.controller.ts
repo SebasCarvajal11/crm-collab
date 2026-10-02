@@ -11,12 +11,11 @@ import type {
 } from '../collab.schemas'
 import type { createContractService } from './contract.service'
 
+import { getIp, getUa } from '../../../shared/request-context';
+
 const requestMeta = (c: Context) => ({
-  ipAddress:
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
-    c.req.header('x-real-ip')?.trim() ??
-    'unknown',
-  userAgent: c.req.header('user-agent') ?? 'unknown',
+  ipAddress: getIp(c),
+  userAgent: getUa(c),
 })
 
 const projectId = (c: Context) => c.req.param('projectId') ?? ''
