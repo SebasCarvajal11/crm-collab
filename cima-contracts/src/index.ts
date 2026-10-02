@@ -15,9 +15,10 @@ export * from "./gateway-manifest";
 // node:crypto or prom-client into bundles that don't need them.
 //
 // The following modules are also accessed via explicit subpath:
-// ./logger, ./redis, ./worker-health,
+// ./logger, ./redis, ./worker-health, ./token-blocklist,
 // ./hono-security-middleware, ./hono-request-logger-middleware,
 // ./hono-error-handler-middleware, ./hono-auth-middleware
+
 
 
 
