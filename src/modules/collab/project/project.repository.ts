@@ -31,7 +31,7 @@ export const createProjectRepository = (conn: DbOrTx) => ({
           COUNT(t.id) FILTER (WHERE c.key <> 'pending')::int AS non_pending_count,
           COALESCE(ROUND(AVG(
             CASE
-              WHEN (SELECT COUNT(s.id) FROM schema_collab.project_subtasks s WHERE s.task_id = t.id) > 0
+              WHEN EXISTS (SELECT 1 FROM schema_collab.project_subtasks s WHERE s.task_id = t.id)
                 THEN t.checklist_progress
               WHEN c.key = 'pending' THEN 0
               WHEN c.key = 'doing' THEN 25

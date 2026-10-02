@@ -83,7 +83,7 @@ export async function isUserRevoked(
   try {
     const revokedAt = await redis.get(`${USER_REVOKED_PREFIX}${userId}`);
     if (!revokedAt) return false;
-    return tokenIat <= parseInt(revokedAt, 10);
+    return tokenIat < parseInt(revokedAt, 10);
   } catch (err) {
     logger.warn(
       { topic: "auth:blocklist", err },
