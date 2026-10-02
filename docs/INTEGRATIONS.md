@@ -73,7 +73,8 @@ Este documento define la topología de comunicación, los canales de mensajería
   - `X-User-Id`: UUID del usuario autenticado.
   - `X-User-Role`: Rol canónico CIMA (`admin`, `worker`, `client`).
   - `X-Trace-Id` / `X-Correlation-Id`: Identificadores únicos para observabilidad distribuida.
-- **Circuit Breaker y Health**: KrakenD audita la disponibilidad en `GET /api/v1/health`. Tras 3 fallos consecutivos en una ventana de 60 segundos, conmuta el tráfico temporalmente.
+- **Circuit Breaker y Health**: KrakenD audita la disponibilidad en `GET /api/v1/health`. Con la configuración calibrada (`max_errors: 30`, `interval: 30s`, `timeout: 10s`), si el servicio sufre fallos continuos, KrakenD abre el circuito respondiendo con `503 Service Unavailable` sin saturar la red.
+
 
 ---
 

@@ -6,7 +6,7 @@ Este documento describe el modelo de control de acceso basado en roles contextua
 
 ## 1. Validación de Identidad y Modelo RBAC Contextual
 
-`crm-collab` no gestiona credenciales de usuario; valida la firma de los JWT entrantes utilizando el JWKS público de `crm-auth`.
+`crm-collab` no gestiona credenciales de usuario; valida la firma de los JWT entrantes utilizando el JWKS público de `crm-auth` y comprueba la revocación inmediata de sesiones contra la lista negra en Redis (`@sebascarvajal11/cima-contracts/hono-auth-middleware`).
 
 El control de acceso opera en dos niveles complementarios:
 

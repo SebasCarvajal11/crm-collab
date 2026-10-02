@@ -41,8 +41,8 @@ Configurar `.npmrc` en el servicio consumidor:
 ## Subpaths disponibles
 
 | Subpath | Descripción |
-|---------|-------------|
-| `@.../cima-contracts` | Re-export de todos los contratos (sin `metrics`) |
+|---|---|
+| `@.../cima-contracts` | Re-export de contratos y esquemas principales |
 | `@.../cima-contracts/health` | `buildHealthResponse`, tipos `HealthResponse` |
 | `@.../cima-contracts/event-consumer` | `RedisStreamConsumer`, `NonRetryableStreamError` |
 | `@.../cima-contracts/metrics` | `createServiceMetrics`, `httpMetricsMiddleware` |
@@ -51,8 +51,20 @@ Configurar `.npmrc` en el servicio consumidor:
 | `@.../cima-contracts/auth-identity-events` | Schemas de eventos de identidad |
 | `@.../cima-contracts/collab-project-events` | Schemas de eventos de proyectos |
 | `@.../cima-contracts/media-asset-events` | Schemas de comandos y respuestas de media |
+| `@.../cima-contracts/audit-events` | Schemas y tipos de eventos de auditoría inmutable |
+| `@.../cima-contracts/shared-ui-types` | Tipos compartidos para frontend y APIs |
 | `@.../cima-contracts/email-dispatch` | Contrato estricto de despacho de correo a Media |
 | `@.../cima-contracts/error-catalog` | Catálogo de errores normalizados (`NormalizedError`) |
+| `@.../cima-contracts/token-blocklist` | Revocación inmediata de tokens y usuarios en Redis |
+| `@.../cima-contracts/hono-auth-middleware` | Middleware Hono con soporte JWKS y blocklist |
+| `@.../cima-contracts/hono-security-middleware` | Cabeceras de seguridad perimetral HTTP |
+| `@.../cima-contracts/hono-error-handler-middleware` | Gestor canónico de excepciones Hono |
+| `@.../cima-contracts/hono-request-logger-middleware` | Logging estructurado de peticiones HTTP |
+| `@.../cima-contracts/worker-health` | Protocolo de liveness/readiness para workers |
+| `@.../cima-contracts/redis` | Conexión y cliente Redis unificado |
+| `@.../cima-contracts/retry` | Reintentos con backoff exponencial y jitter |
+| `@.../cima-contracts/gateway-manifest` | Tipado y esquemas de manifiestos KrakenD |
+
 
 ## Desarrollo local
 
