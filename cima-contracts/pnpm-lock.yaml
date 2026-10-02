@@ -12,8 +12,8 @@ importers:
         specifier: ^22.13.0
         version: 22.19.20
       hono:
-        specifier: ^4.12.18
-        version: 4.12.23
+        specifier: ^4.13.12
+        version: 4.13.12
       ioredis:
         specifier: ^5.0.0
         version: 5.11.1
@@ -69,8 +69,8 @@ packages:
     resolution: {integrity: sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==}
     engines: {node: '>=0.10'}
 
-  hono@4.12.23:
-    resolution: {integrity: sha512-eIaZ9qDgu7XV0pxOCrg7/WhnQ6Ivm22UcxhXx/A3dcbqbbYgBEkc6e/J/s7j2tS96zoB0S9VBdLwQNCWwUo4LA==}
+  hono@4.13.12:
+    resolution: {integrity: sha512-6E2QDAc9Ick9Sq77ZrGS/dk2WUYni91aufTw6LJKpV7w8kW5/GxVUc650FOADOmlwg3K+f7Pun6XlV+pYmW6gw==}
     engines: {node: '>=16.9.0'}
 
   ioredis@5.11.1:
@@ -171,7 +171,7 @@ snapshots:
 
   denque@2.1.0: {}
 
-  hono@4.12.23: {}
+  hono@4.13.12: {}
 
   ioredis@5.11.1:
     dependencies:

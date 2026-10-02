@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   validate:
-    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-ci.yml@v2.5.0
+    uses: SebasCarvajal11/crm-infra/.github/workflows/reusable-ci.yml@main
     with:
       component: collab
       test_command: pnpm test:unit
