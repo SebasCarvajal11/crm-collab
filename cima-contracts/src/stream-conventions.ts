@@ -43,6 +43,16 @@ export const STREAM_CONVENTIONS = {
 } as const;
 
 /**
+ * Límites de longitud recomendados para recorte aproximado (MAXLEN ~) en Redis Streams.
+ * Previene el crecimiento descontrolado de memoria RAM en el bus de eventos.
+ */
+export const STREAM_LIMITS = {
+  defaultMaxLen: 50000,
+  dlqMaxLen: 10000,
+  auditMaxLen: 100000,
+} as const;
+
+/**
  * Deriva dinámicamente un nombre de stream en base al dominio del contrato y la versión mayor.
  */
 export function deriveStreamName(domain: "auth" | "collab" | "media", name: string, version: number): string {

@@ -1,8 +1,12 @@
 import { createMiddleware } from "hono/factory";
+import { createPublicKey, verify as cryptoVerify, type KeyObject } from "node:crypto";
+import { promisify } from "node:util";
 import { getLogger } from "./logger";
 import { JwksClient } from "./jwks";
 import { AppError } from "./hono-error-handler-middleware";
 import { isTokenRevoked, isUserRevoked } from "./token-blocklist";
+
+const asyncVerify = promisify(cryptoVerify);
 
 const logger = getLogger();
 
@@ -61,17 +65,14 @@ interface CachedTokenVerification {
   expiresAt: number;
 }
 
-const publicKeyCache = new Map<string, import("node:crypto").KeyObject>();
+const publicKeyCache = new Map<string, KeyObject>();
 const tokenVerificationCache = new Map<string, CachedTokenVerification>();
 const MAX_TOKEN_CACHE_SIZE = 1000;
 const MAX_TOKEN_CACHE_TTL_MS = 60 * 1000;
 
-const getOrCreatePublicKey = async (
-  pem: string
-): Promise<import("node:crypto").KeyObject> => {
+const getOrCreatePublicKey = (pem: string): KeyObject => {
   const cached = publicKeyCache.get(pem);
   if (cached) return cached;
-  const { createPublicKey } = await import("node:crypto");
   const key = createPublicKey(pem);
   publicKeyCache.set(pem, key);
   return key;
@@ -108,7 +109,6 @@ const verifyRs256 = async (
   const cached = getCachedVerifiedPayload(token);
   if (cached) return cached;
 
-  const { createVerify } = await import("node:crypto");
   const [headerB64, payloadB64, signatureB64] = token.split(".");
   if (!headerB64 || !payloadB64 || !signatureB64) {
     throw new Error("Token JWT malformado");
@@ -126,13 +126,10 @@ const verifyRs256 = async (
     throw new Error("Issuer no coincide");
   }
 
-  const key = await getOrCreatePublicKey(publicKeyPem);
-  const verifier = createVerify("RSA-SHA256");
-  verifier.update(`${headerB64}.${payloadB64}`);
-  const valid = verifier.verify(
-    key,
-    Buffer.from(signatureB64, "base64url")
-  );
+  const key = getOrCreatePublicKey(publicKeyPem);
+  const data = Buffer.from(`${headerB64}.${payloadB64}`);
+  const signature = Buffer.from(signatureB64, "base64url");
+  const valid = await asyncVerify("sha256", data, key, signature);
   if (!valid) throw new Error("Firma JWT inválida");
 
   setCachedVerifiedPayload(token, payload);

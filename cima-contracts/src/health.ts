@@ -1,9 +1,10 @@
-export type DependencyStatus = "ok" | "down" | "timeout";
+export type DependencyStatus = "ok" | "down" | "timeout" | "standby" | "inactive";
 
 export type HealthDependency = {
   status: DependencyStatus;
   latencyMs?: number;
   error?: string;
+  critical?: boolean;
 };
 
 export type HealthResponse = {
@@ -21,8 +22,17 @@ export function buildHealthResponse(
   dependencies: Record<string, HealthDependency>
 ): { body: HealthResponse; status: 200 | 503 } {
   const values = Object.values(dependencies);
-  const hasCriticalFailure = values.some((d) => d.status === "down");
-  const hasDegraded = values.some((d) => d.status === "timeout");
+  const hasCriticalFailure = values.some(
+    (d) => (d.status === "down" || d.status === "timeout") && d.critical !== false
+  );
+  const hasDegraded = values.some(
+    (d) =>
+      ((d.status === "down" ||
+        d.status === "timeout" ||
+        d.status === "standby" ||
+        d.status === "inactive") &&
+        d.critical === false)
+  );
 
   let status: "ok" | "degraded" | "down" = "ok";
   if (hasCriticalFailure) {
