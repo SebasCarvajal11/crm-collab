@@ -156,7 +156,7 @@ async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<M
     command.traceId = store.traceId;
   }
 
-  const signedCommand = signMediaCommand(command);
+  const signedCommand = await signMediaCommand(command);
   const mediaBase = (env.MEDIA_SERVICE_URL || "http://crm-media:3002").replace(/\/$/, "");
 
   try {
@@ -193,7 +193,7 @@ async function sendMediaCommand(command: UnsignedMediaCommandRequest): Promise<M
   }
 }
 
-function signMediaCommand(command: UnsignedMediaCommandRequest): MediaCommandRequest {
+async function signMediaCommand(command: UnsignedMediaCommandRequest): Promise<MediaCommandRequest> {
   const now = Math.floor(Date.now() / 1000);
   const jwtPayload = {
     iss: "crm-collab",
@@ -205,7 +205,7 @@ function signMediaCommand(command: UnsignedMediaCommandRequest): MediaCommandReq
     iat: now,
     exp: now + 60,
   };
-  const signature = signServiceJwt(jwtPayload);
+  const signature = await signServiceJwt(jwtPayload);
   return { ...command, signature };
 }
 
