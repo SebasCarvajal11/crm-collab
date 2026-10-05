@@ -41,7 +41,7 @@ const authConsumerCircuitBreaker = new SimpleCircuitBreaker(
 // branch in `handleAuthEvent`. The DLQ routing for unsupported versions is
 // handled automatically by RedisStreamConsumer.
 
-const versionedSchemas: VersionedSchemas<AuthIdentityEvent> = new Map([
+export const versionedSchemas: VersionedSchemas<AuthIdentityEvent> = new Map([
   [1, authIdentityEventV1Schema as z.ZodType<AuthIdentityEvent>],
   [2, authIdentityEventV2Schema as z.ZodType<AuthIdentityEvent>],
 ]);
@@ -192,10 +192,8 @@ export async function handleAuthEvent(event: AuthIdentityEvent | unknown): Promi
 
   const action = async () => {
     if (version === 1) {
-      authIdentityEventV1Schema.parse({ version: 1, ...(evt as any) });
       await handleAuthEventV1(evt);
     } else if (version === 2) {
-      authIdentityEventV2Schema.parse(evt);
       await handleAuthEventV2(evt);
     } else {
       // Unreachable: versionedSchemas guards this above, but kept for safety.

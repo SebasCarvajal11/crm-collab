@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { handleAuthEvent } from "./auth-event-handler";
+import { handleAuthEvent, versionedSchemas } from "./auth-event-handler";
 import * as snapshotStore from "../../../shared/identity-snapshot-store";
 
 vi.mock("../../../shared/identity-snapshot-store", () => ({
@@ -179,7 +179,7 @@ describe("auth-event-handler", () => {
       await expect(handleAuthEvent(eventV3)).rejects.toThrow("Unsupported event version: 3");
     });
 
-    it("should throw validation error if event V1 payload is malformed", async () => {
+    it("should reject malformed event V1 payload in versionedSchemas boundary", () => {
       const invalidEventV1 = {
         version: 1,
         type: "user.registered",
@@ -189,10 +189,12 @@ describe("auth-event-handler", () => {
         timestamp: "invalid-date",
       };
 
-      await expect(handleAuthEvent(invalidEventV1)).rejects.toThrow();
+      const schema = versionedSchemas.get(1);
+      const parsed = schema?.safeParse(invalidEventV1);
+      expect(parsed?.success).toBe(false);
     });
 
-    it("should throw validation error if event V2 payload is malformed", async () => {
+    it("should reject malformed event V2 payload in versionedSchemas boundary", () => {
       const invalidEventV2 = {
         version: 2,
         type: "user.registered",
@@ -202,7 +204,9 @@ describe("auth-event-handler", () => {
         timestamp: "invalid-date",
       };
 
-      await expect(handleAuthEvent(invalidEventV2)).rejects.toThrow();
+      const schema = versionedSchemas.get(2);
+      const parsed = schema?.safeParse(invalidEventV2);
+      expect(parsed?.success).toBe(false);
     });
   });
 });
