@@ -63,7 +63,14 @@ export async function appendAuthEventToDlq(
     fields.push("payload", record.payload);
   }
 
-  const dlqId = await redis.xadd(env.AUTH_EVENTS_DLQ_STREAM_KEY, "*", ...fields);
+  const dlqId = await redis.xadd(
+    env.AUTH_EVENTS_DLQ_STREAM_KEY,
+    "MAXLEN",
+    "~",
+    env.AUTH_EVENTS_DLQ_MAXLEN,
+    "*",
+    ...fields
+  );
   if (!dlqId) {
     throw new Error("Redis no devolvio id al escribir la entrada DLQ");
   }
@@ -103,6 +110,9 @@ export async function replayAuthEventDlqEntry(
 
   const replayedMessageId = await redis.xadd(
     entry.sourceStream || env.AUTH_EVENTS_STREAM_KEY,
+    "MAXLEN",
+    "~",
+    env.REDIS_STREAMS_MAXLEN,
     "*",
     "payload",
     entry.payload,

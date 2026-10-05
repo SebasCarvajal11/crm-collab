@@ -267,6 +267,9 @@ export class RedisStreamsEventBus implements EventBus {
     );
     const dlqId = await this.publisher.xadd(
       env.COLLAB_EVENTS_DLQ_STREAM_KEY,
+      "MAXLEN",
+      "~",
+      env.COLLAB_EVENTS_DLQ_MAXLEN,
       "*",
       "sourceStream", this.streamKey,
       "sourceGroup", this.group,

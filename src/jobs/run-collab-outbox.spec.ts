@@ -15,7 +15,7 @@ const state = vi.hoisted(() => {
 vi.mock("../db/connection", () => ({ db: {} }));
 vi.mock("../shared/redis", () => ({ getRedisConnection: () => state.redis }));
 vi.mock("../config/env", () => ({
-  env: { COLLAB_OUTBOX_BATCH_SIZE: 50, REDIS_STREAMS_KEY: "stream:collab.events" },
+  env: { COLLAB_OUTBOX_BATCH_SIZE: 50, REDIS_STREAMS_KEY: "stream:collab.events", REDIS_STREAMS_MAXLEN: 50000 },
 }));
 vi.mock("../shared/logger", () => ({
   getLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -52,6 +52,15 @@ describe("runCollabOutbox", () => {
       claimToken: expect.any(String),
     }));
     expect(state.pipeline.xadd).toHaveBeenCalledTimes(2);
+    expect(state.pipeline.xadd).toHaveBeenCalledWith(
+      "stream:collab.events",
+      "MAXLEN",
+      "~",
+      50000,
+      "*",
+      "payload",
+      JSON.stringify({ version: 1 })
+    );
     expect(state.repository.markCollabOutboxPublished).toHaveBeenCalledWith(
       ["event-1", "event-2"],
       expect.any(String)

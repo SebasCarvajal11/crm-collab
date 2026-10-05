@@ -31,6 +31,9 @@ export async function runCollabOutbox(): Promise<{ processed: number; failed: nu
   for (const event of pending) {
     publishPipeline.xadd(
       env.REDIS_STREAMS_KEY,
+      "MAXLEN",
+      "~",
+      env.REDIS_STREAMS_MAXLEN,
       "*",
       "payload",
       JSON.stringify(event.payload)

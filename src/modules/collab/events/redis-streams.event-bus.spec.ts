@@ -72,6 +72,9 @@ describe("RedisStreamsEventBus", () => {
     expect(acknowledged).toBe(true);
     expect(publisher.xadd).toHaveBeenCalledWith(
       expect.any(String),
+      "MAXLEN",
+      "~",
+      expect.any(Number),
       "*",
       "sourceStream", expect.any(String),
       "sourceGroup", expect.any(String),
