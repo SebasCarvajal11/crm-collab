@@ -77,7 +77,7 @@ const envSchema = z
     NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(180),
     NOTIFICATION_RETENTION_INTERVAL_MS: z.coerce.number().int().min(60 * 60 * 1000).default(24 * 60 * 60 * 1000),
     MEDIA_ACCESS_CACHE_PRUNE_INTERVAL_MS: z.coerce.number().int().min(60 * 60 * 1000).default(60 * 60 * 1000),
-    DLQ_AUTO_REPLAY_INTERVAL_MS: z.coerce.number().int().nonnegative().default(60000),
+    DLQ_AUTO_REPLAY_INTERVAL_MS: z.coerce.number().int().nonnegative().default(0),
     RATE_LIMIT_COLLAB_CHAT_MAX: z.coerce.number().int().positive().default(40),
     RATE_LIMIT_COLLAB_CHAT_WINDOW_MS: z.coerce.number().int().positive().default(60 * 1000),
     RATE_LIMIT_COLLAB_FILE_UPLOAD_MAX: z.coerce.number().int().positive().default(40),
