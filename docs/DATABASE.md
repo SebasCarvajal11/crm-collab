@@ -33,7 +33,16 @@ Para permitir búsquedas inmediatas de miembros, autocompletado en menciones y v
 
 ---
 
-## 3. Protocolo de Migración Sin Downtime (Expand & Contract)
+## 3. Optimización de Patrón Outbox (`collab_outbox`)
+
+Para evitar degradación de latencia por acumulación histórica de eventos ya publicados:
+- **Índice Parcial Activo**: `collab_outbox_active_idx` indexa `(created_at ASC) WHERE status IN ('pending', 'failed', 'processing')`. Esto mantiene el conjunto activo indexado en < 100 filas, garantizando sondeos de publicación en < 1ms con `SKIP LOCKED`.
+- **Índice Parcial de Publicados**: `collab_outbox_published_at_idx` indexa `(published_at ASC) WHERE status = 'published'`.
+- **Purga Periódica en Micro-Lotes**: El worker de outbox ejecuta periódicamente `prunePublishedCollabOutbox` eliminando eventos en estado `'published'` con antigüedad superior a `COLLAB_OUTBOX_RETENTION_DAYS` (por defecto 7 días) en micro-lotes de 500 registros, previniendo sobrecarga en PostgreSQL y bloat de índices.
+
+---
+
+## 4. Protocolo de Migración Sin Downtime (Expand & Contract)
 
 Para garantizar compatibilidad con los despliegues Blue/Green de producción:
 
@@ -43,7 +52,7 @@ Para garantizar compatibilidad con los despliegues Blue/Green de producción:
 
 ---
 
-## 4. Scripts y Comandos Útiles
+## 5. Scripts y Comandos Útiles
 
 | Comando | Descripción |
 | :--- | :--- |

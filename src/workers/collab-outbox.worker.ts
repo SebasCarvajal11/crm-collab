@@ -7,6 +7,7 @@ import { getRedisConnection, initRedis } from "../shared/redis";
 import { serviceMetrics } from "../app";
 import { pruneReadNotifications } from "../jobs/prune-notifications";
 import { pruneExpiredMediaAccessCache } from "../jobs/prune-media-access-cache";
+import { prunePublishedCollabOutbox } from "../jobs/prune-collab-outbox";
 import { checkClientApprovalSla } from "../jobs/check-approval-sla";
 
 const logger = getLogger();
@@ -31,6 +32,7 @@ const healthcheck = startWorkerHealthcheck("collab-outbox-worker", {
 });
 let lastNotificationPruneAt = 0;
 let lastMediaAccessCachePruneAt = 0;
+let lastOutboxPruneAt = 0;
 let lastSlaCheckAt = 0;
 
 const tick = async () => {
@@ -53,6 +55,18 @@ const tick = async () => {
       const removed = await pruneExpiredMediaAccessCache();
       lastMediaAccessCachePruneAt = Date.now();
       logger.info({ removed }, "caché expirada de accesos a media depurada");
+    }
+    if (Date.now() - lastOutboxPruneAt >= env.COLLAB_OUTBOX_PRUNE_INTERVAL_MS) {
+      const removed = await prunePublishedCollabOutbox({
+        retentionDays: env.COLLAB_OUTBOX_RETENTION_DAYS,
+      });
+      lastOutboxPruneAt = Date.now();
+      if (removed > 0) {
+        logger.info(
+          { removed, retentionDays: env.COLLAB_OUTBOX_RETENTION_DAYS },
+          "eventos publicados de outbox depurados"
+        );
+      }
     }
     if (Date.now() - lastSlaCheckAt >= 60_000) {
       const { blockedCount } = await checkClientApprovalSla();

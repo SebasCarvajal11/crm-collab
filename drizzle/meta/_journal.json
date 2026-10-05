@@ -113,6 +113,13 @@
       "when": 1790080000000,
       "tag": "0015_add_file_purged_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790100000000,
+      "tag": "0016_optimize_collab_outbox",
+      "breakpoints": true
     }
   ]
 }

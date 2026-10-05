@@ -74,6 +74,8 @@ const envSchema = z
     AUTH_EVENTS_DLQ_MAXLEN: z.coerce.number().int().min(100).default(10000),
     COLLAB_OUTBOX_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
     COLLAB_OUTBOX_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+    COLLAB_OUTBOX_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+    COLLAB_OUTBOX_PRUNE_INTERVAL_MS: z.coerce.number().int().min(60 * 1000).default(60 * 60 * 1000),
     NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(180),
     NOTIFICATION_RETENTION_INTERVAL_MS: z.coerce.number().int().min(60 * 60 * 1000).default(24 * 60 * 60 * 1000),
     MEDIA_ACCESS_CACHE_PRUNE_INTERVAL_MS: z.coerce.number().int().min(60 * 60 * 1000).default(60 * 60 * 1000),

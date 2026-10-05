@@ -14,7 +14,7 @@ import {
   bigint,
   serial,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 
 export const collabSchema = pgSchema("schema_collab");
@@ -655,6 +655,12 @@ export const collabOutbox = collabSchema.table(
     index("collab_outbox_status_available_idx").on(t.status, t.availableAt),
     index("collab_outbox_status_claimed_idx").on(t.status, t.claimedAt),
     index("collab_outbox_project_idx").on(t.projectId),
+    index("collab_outbox_active_idx")
+      .on(t.createdAt)
+      .where(sql`${t.status} IN ('pending', 'failed', 'processing')`),
+    index("collab_outbox_published_at_idx")
+      .on(t.publishedAt)
+      .where(sql`${t.status} = 'published'`),
   ]
 );
 
