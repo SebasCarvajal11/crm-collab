@@ -97,4 +97,11 @@ describe("collab.worker", () => {
     expect(mocks.closeRedisConnections).toHaveBeenCalled();
     expect(mocks.poolEnd).toHaveBeenCalled();
   });
+
+  it("tolera errores en el ciclo de outbox sin abortar el worker", async () => {
+    mocks.runCollabOutbox.mockRejectedValueOnce(new Error("Collab outbox DB error"));
+
+    await expect(startCollabWorker()).resolves.not.toThrow();
+    await stopCollabWorker();
+  });
 });

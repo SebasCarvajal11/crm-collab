@@ -57,7 +57,7 @@ services:
       REDIS_STREAMS_KEY: stream:collab.events
       COLLAB_OUTBOX_INTERVAL_MS: 5000
       COLLAB_OUTBOX_BATCH_SIZE: 50
-    command: ["pnpm", "worker:collab"]
+    command: ["node", "dist/workers/collab.worker.js"]
     depends_on:
       postgres_db:
         condition: service_healthy

@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { env } from "../config/env";
 import { getLogger } from "../shared/logger";
 import { runCollabOutbox } from "../jobs/run-collab-outbox";
@@ -100,6 +102,7 @@ async function tick(): Promise<void> {
 }
 
 export async function startCollabWorker(): Promise<void> {
+  state.isShuttingDown = false;
   if (!env.REDIS_URL) {
     throw new Error("REDIS_URL es requerida para el collab worker");
   }
@@ -127,6 +130,11 @@ export async function stopCollabWorker(): Promise<void> {
     clearInterval(state.timer);
   }
 
+  const deadline = Date.now() + 5000;
+  while (state.isTicking && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
   if (state.healthcheck) {
     state.healthcheck.stop();
   }
@@ -136,10 +144,10 @@ export async function stopCollabWorker(): Promise<void> {
   logger.info({ topic: "worker:collab" }, "Collab worker detenido");
 }
 
-const isDirectRun =
+const isDirectRun = Boolean(
   process.argv[1] &&
-  (import.meta.url.endsWith(process.argv[1].replace(/\\/g, "/")) ||
-    process.argv[1].includes("collab.worker"));
+    fileURLToPath(import.meta.url) === path.resolve(process.argv[1]),
+);
 
 if (isDirectRun) {
   const shutdown = async () => {
