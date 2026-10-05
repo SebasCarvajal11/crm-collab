@@ -9,6 +9,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "pnpm --prefix cima-contracts build && tsup",
     "start": "node dist/server.js",
+    "worker:collab": "node dist/workers/collab.worker.js",
     "worker:collab-outbox": "node dist/workers/collab-outbox.worker.js",
     "db:bootstrap": "tsx src/db/scripts/bootstrap.ts",
     "db:generate": "drizzle-kit generate",

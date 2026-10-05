@@ -38,7 +38,7 @@ services:
         aliases:
           - collab
 
-  crm-collab-outbox-worker:
+  crm-collab-worker:
     build:
       context: .
       dockerfile: Dockerfile
@@ -57,7 +57,7 @@ services:
       REDIS_STREAMS_KEY: stream:collab.events
       COLLAB_OUTBOX_INTERVAL_MS: 5000
       COLLAB_OUTBOX_BATCH_SIZE: 50
-    command: ["pnpm", "worker:collab-outbox"]
+    command: ["pnpm", "worker:collab"]
     depends_on:
       postgres_db:
         condition: service_healthy
