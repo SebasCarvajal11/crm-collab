@@ -28,6 +28,7 @@
     "test:contract": "node scripts/run-contract-test.mjs",
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
+    "test:env:setup": "node scripts/setup-test-env.mjs",
     "lint": "eslint src/modules/collab --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "preinstall": "pnpm dlx only-allow pnpm"
