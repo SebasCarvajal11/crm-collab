@@ -31,8 +31,6 @@ const fileController = createFileController(uploadService, managementService);
 
 export const fileRoutes = new Hono<AppEnv>();
 
-fileRoutes.get("/internal/storage-access", fileController.assertStoragePathAccess);
-
 fileRoutes.get(
   "/projects/:projectId/files",
   zValidator("param", ProjectIdParamSchema),

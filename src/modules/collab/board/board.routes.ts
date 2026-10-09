@@ -16,6 +16,7 @@ import {
   CreateTaskSchema,
   UpdateTaskSchema,
   ProjectTasksQuerySchema,
+  TaskSearchQuerySchema,
   TaskIdParamSchema,
   ProjectTaskIdParamSchema,
   CreateTaskCommentSchema,
@@ -53,6 +54,13 @@ boardRoutes.patch(
 );
 
 boardRoutes.get(
+  "/projects/:projectId/tasks/search",
+  zValidator("param", ProjectIdParamSchema),
+  zValidator("query", TaskSearchQuerySchema),
+  boardController.searchTasks
+);
+
+boardRoutes.get(
   "/projects/:projectId/tasks",
   zValidator("param", ProjectIdParamSchema),
   zValidator("query", ProjectTasksQuerySchema),
@@ -80,18 +88,6 @@ boardRoutes.post(
 boardRoutes.post(
   "/projects/:projectId/tasks/:taskId/unblock",
   zValidator("param", ProjectTaskIdParamSchema),
-  zValidator("json", UnblockTaskSchema),
-  boardController.unblockTask
-);
-boardRoutes.post(
-  "/tasks/:taskId/block",
-  zValidator("param", TaskIdParamSchema),
-  zValidator("json", BlockTaskSchema),
-  boardController.blockTask
-);
-boardRoutes.post(
-  "/tasks/:taskId/unblock",
-  zValidator("param", TaskIdParamSchema),
   zValidator("json", UnblockTaskSchema),
   boardController.unblockTask
 );

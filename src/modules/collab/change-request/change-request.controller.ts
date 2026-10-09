@@ -10,25 +10,9 @@ import type {
   ListChangeRequestsQuery,
 } from "../collab.schemas";
 import type { createChangeRequestService } from "./change-request.service";
-
 import { getIp, getUa } from "../../../shared/request-context";
+
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
-
-const mapChangeRequest = (req: any) => {
-  if (!req) return req;
-  return {
-    ...req,
-    status: req.status === "accepted" ? "resolved" : req.status,
-  };
-};
-
-const mapChangeRequestsPage = (result: any) => {
-  if (!result || !Array.isArray(result.items)) return result;
-  return {
-    ...result,
-    items: result.items.map(mapChangeRequest),
-  };
-};
 
 export const createChangeRequestController = (service: ReturnType<typeof createChangeRequestService>) => ({
   createMinorChangeRequest: async (c: Context<AppEnv>) => {
@@ -39,7 +23,7 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
       { taskId: body.task_id, title: body.title, description: body.description, priority: body.priority },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: mapChangeRequest(row) }, 201);
+    return c.json({ data: row }, 201);
   },
 
   createFormalChangeRequest: async (c: Context<AppEnv>) => {
@@ -56,7 +40,7 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: mapChangeRequest(row) }, 201);
+    return c.json({ data: row }, 201);
   },
 
   resolveChangeRequest: async (c: Context<AppEnv>) => {
@@ -70,7 +54,7 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
       body.comment,
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );
-    return c.json({ data: mapChangeRequest(row) }, 200);
+    return c.json({ data: row }, 200);
   },
 
   listChangeRequests: async (c: Context<AppEnv>) => {
@@ -80,7 +64,7 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
       type: q.type,
       status: status as any,
     });
-    return c.json({ data: rows.map(mapChangeRequest) }, 200);
+    return c.json({ data: rows }, 200);
   },
 
   listFormalChangeLog: async (c: Context<AppEnv>) => {
@@ -89,11 +73,11 @@ export const createChangeRequestController = (service: ReturnType<typeof createC
       page: q.page,
       limit: q.limit,
     });
-    return c.json({ data: mapChangeRequestsPage(result) }, 200);
+    return c.json({ data: result }, 200);
   },
 
   listPendingChangeRequests: async (c: Context<AppEnv>) => {
     const rows = await service.listPendingChangeRequests(actorFromContext(c));
-    return c.json({ data: rows.map(mapChangeRequest) }, 200);
+    return c.json({ data: rows }, 200);
   },
 });

@@ -52,8 +52,7 @@ Cada subdominio implementa el patrón de capas:
 ## 3. Background Workers y Procesos en Segundo Plano
 
 | Worker | Comando | Responsabilidad | Dependencias |
-| :--- | :--- | :--- | :--- |
-| **Collab Outbox Worker** | `pnpm worker:collab-outbox` | Sondea la tabla `schema_collab.collab_outbox` y publica eventos a Redis Stream. | PostgreSQL (`collab_outbox`), Redis |
+| **Collab Worker** | `pnpm worker:collab` | Sondea la tabla `schema_collab.collab_outbox`, publica eventos a Redis Stream y ejecuta tareas de mantenimiento programadas. | PostgreSQL (`collab_outbox`), Redis |
 
 ### Ciclo de Vida y Apagado Controlado (Graceful Shutdown)
 - **Monitoreo de Salud**: El worker escribe su estado cada 15 segundos en `/tmp/worker-healthy`, comprobado por Docker mediante [`docker-healthcheck.sh`](file:///d:/BACKUP%20CELULAR%20OLIMPO/crm-collab/docker-healthcheck.sh).

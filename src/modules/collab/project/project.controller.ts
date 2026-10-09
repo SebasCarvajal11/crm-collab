@@ -95,14 +95,4 @@ export const createProjectController = (service: ReturnType<typeof createProject
     );
     return c.json({ data: result.items }, 200);
   },
-
-  listFilesTimeline: async (c: Context<AppEnv>) => {
-    const query = validatedQuery<{ page: number; limit: number }>(c);
-    const result = await service.listProjectTimeline(
-      actorFromContext(c),
-      requiredParam(c, "projectId"),
-      query
-    );
-    return c.json({ data: result.items }, 200);
-  },
 });

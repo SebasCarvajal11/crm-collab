@@ -1,5 +1,6 @@
 import { ForbiddenError, NotFoundError } from "../../../shared/middlewares/error-handler.middleware";
 import { canEditBrief } from "../shared/guards";
+import { collabEvents } from "../events";
 import { assertProjectAccess } from "../shared/project-access";
 import { createAuditRepository } from "../repository/audit.repository";
 import type { GlobalRole } from "../collab.types";
@@ -63,6 +64,10 @@ export const createBriefService = (
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
         });
+        await collabEvents.emit("brief.updated", projectId, actor.sub, {
+          projectId,
+          updatedBySub: actor.sub,
+        }, tx);
         return brief;
       });
     },

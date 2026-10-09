@@ -53,5 +53,6 @@ export interface UpdateTaskInput {
   subtasks?: TaskSubtaskInput[];
   blockReason?: string | null;
   blockType?: "client_timeout" | "internal_impediment" | null;
+  resolutionComment?: string;
 }
 

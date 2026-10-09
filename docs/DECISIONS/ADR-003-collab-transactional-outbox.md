@@ -35,7 +35,7 @@ Publicar directamente en Redis dentro del controlador HTTP después de hacer `CO
 
 Adoptar la **Opción 3**:
 1. El servidor HTTP ejecuta las mutaciones de negocio y la inserción en `schema_collab.collab_outbox` en una única transacción atómica ACID en PostgreSQL.
-2. Se ejecuta un worker dedicado en un proceso independiente: `worker:collab-outbox` (`src/workers/collab-outbox.worker.ts`).
+2. Se ejecuta un worker dedicado en un proceso independiente: `worker:collab` (`src/workers/collab.worker.ts`).
 3. El worker consulta eventos con estado `PENDING` utilizando concurrencia segura:
    ```sql
    SELECT * FROM schema_collab.collab_outbox

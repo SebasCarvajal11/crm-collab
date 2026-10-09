@@ -135,11 +135,4 @@ export const createFileController = (
     );
     return c.json({ data }, 200);
   },
-
-  assertStoragePathAccess: async (c: Context<AppEnv>) => {
-    const storagePath = c.req.query("objectKey")?.trim();
-    if (!storagePath) throw new AppError(400, "objectKey es requerido");
-    await managementService.assertStoragePathAccess(actorFromContext(c), storagePath);
-    return c.body(null, 204);
-  },
 });

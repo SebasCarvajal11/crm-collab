@@ -103,6 +103,16 @@
       "openapi_ref": "PATCH /api/v1/collab/columns/{columnId}"
     },
     {
+      "endpoint": "/api/v1/collab/projects/{projectId}/tasks/search",
+      "method": "GET",
+      "backend_url": "/api/v1/collab/projects/{projectId}/tasks/search",
+      "input_query_strings": [
+        "q",
+        "limit"
+      ],
+      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/tasks/search"
+    },
+    {
       "endpoint": "/api/v1/collab/projects/{projectId}/tasks",
       "method": "GET",
       "backend_url": "/api/v1/collab/projects/{projectId}/tasks",
@@ -247,22 +257,10 @@
       "openapi_ref": "GET /api/v1/collab/projects/{projectId}/timeline"
     },
     {
-      "endpoint": "/api/v1/collab/projects/{projectId}/files/timeline",
-      "method": "GET",
-      "backend_url": "/api/v1/collab/projects/{projectId}/files/timeline",
-      "openapi_ref": "GET /api/v1/collab/projects/{projectId}/files/timeline"
-    },
-    {
       "endpoint": "/api/v1/collab/projects/{projectId}/files/upload-url",
       "method": "POST",
       "backend_url": "/api/v1/collab/projects/{projectId}/files/upload-url",
       "openapi_ref": "POST /api/v1/collab/projects/{projectId}/files/upload-url"
-    },
-    {
-      "endpoint": "/api/v1/collab/projects/{projectId}/files/upload",
-      "method": "POST",
-      "backend_url": "/api/v1/collab/projects/{projectId}/files/upload",
-      "openapi_ref": "POST /api/v1/collab/projects/{projectId}/files/upload"
     },
     {
       "endpoint": "/api/v1/collab/projects/{projectId}/files/uploaded-object",

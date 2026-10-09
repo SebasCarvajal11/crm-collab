@@ -48,7 +48,7 @@ export const createContractRepository = (conn: DbOrTx) => ({
     payload: Pick<
       NewProjectContract,
       'signedBySub' | 'signerName' | 'signatureDataUrl' | 'signedIpAddress' | 'signedUserAgent'
-    >,
+    > & { contentSnapshot?: string; contentHash?: string },
   ) => {
     const now = new Date()
     const [row] = await conn
@@ -63,6 +63,8 @@ export const createContractRepository = (conn: DbOrTx) => ({
         signedAt: now,
         consentAcceptedAt: now,
         updatedAt: now,
+        ...(payload.contentSnapshot ? { contentSnapshot: payload.contentSnapshot } : {}),
+        ...(payload.contentHash ? { contentHash: payload.contentHash } : {}),
       })
       .where(eq(projectContracts.projectId, projectId))
       .returning()

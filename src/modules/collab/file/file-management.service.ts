@@ -122,6 +122,7 @@ export const createFileManagementService = (
         }
       }
       await db.transaction(async (tx) => {
+        await createProjectRepository(tx).clearLatestApprovedFileIfMatches(file.projectId, fileId);
         await createFileRepository(tx).deleteFileById(fileId);
         await createAuditRepository(tx).createAuditLog({
           actorSub: actor.sub,
@@ -184,17 +185,6 @@ export const createFileManagementService = (
         limit: 1000,
         offset: 0,
       });
-    },
-
-    assertStoragePathAccess: async (actor: Actor, storagePath: string) => {
-      const file = await fileRepository.findFileByStoragePath(storagePath);
-      if (!file) {
-        throw new NotFoundError("Archivo no registrado en colaboración");
-      }
-      const { member } = await assertProjectAccess(accessRepo, actor, file.projectId);
-      if ((actor.role === "client" || member?.role === "client") && !file.isClientVisible) {
-        throw new ForbiddenError("No tienes permiso para este archivo");
-      }
     },
   };
 };

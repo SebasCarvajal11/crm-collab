@@ -65,9 +65,4 @@ projectRoutes.get(
   zValidator("query", PaginationQuerySchema),
   projectController.listProjectTimeline
 );
-projectRoutes.get(
-  "/projects/:projectId/files/timeline",
-  zValidator("param", ProjectIdParamSchema),
-  zValidator("query", PaginationQuerySchema),
-  projectController.listFilesTimeline
-);
+

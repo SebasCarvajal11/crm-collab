@@ -60,7 +60,7 @@ export function resolveActivityRecipients(
   excludedRecipients?: string[]
 ): Member[] {
   const excluded = new Set(excludedRecipients ?? []);
-  if (explicitRecipients) {
+  if (explicitRecipients && explicitRecipients.length > 0) {
     const allowed = new Set(explicitRecipients);
     return members.filter(
       (member) => member.userSub !== actorSub && !excluded.has(member.userSub) && allowed.has(member.userSub)
@@ -74,9 +74,30 @@ export function resolveActivityRecipients(
   );
 }
 
-function describe(type: CollabEvent<CollabEventPayload>["type"], data: Record<string, unknown>): Activity | null {
+export function describe(type: CollabEvent<CollabEventPayload>["type"], data: Record<string, unknown>): Activity | null {
   const taskTitle = text(data.taskTitle, "una tarea");
   switch (type) {
+    case "task.blocked": {
+      const blockReason = typeof data.blockReason === "string" && data.blockReason.trim() ? data.blockReason.trim() : "";
+      const body = blockReason
+        ? `bloqueó la tarea "${taskTitle}": ${blockReason}`
+        : `bloqueó la tarea "${taskTitle}"`;
+      return {
+        channel: data.clientVisible === true ? "external" : "internal",
+        title: "Tarea bloqueada",
+        body,
+        resourceType: "project_task",
+        resourceId: text(data.taskId, ""),
+      };
+    }
+    case "task.unblocked":
+      return {
+        channel: data.clientVisible === true ? "external" : "internal",
+        title: "Tarea desbloqueada",
+        body: `desbloqueó la tarea "${taskTitle}"`,
+        resourceType: "project_task",
+        resourceId: text(data.taskId, ""),
+      };
     case "chat.message.internal":
       return {
         channel: "internal",

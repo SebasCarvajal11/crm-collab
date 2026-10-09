@@ -1,5 +1,6 @@
 import { BadRequestError, ForbiddenError, NotFoundError } from "../../../shared/middlewares/error-handler.middleware";
 import { canManageProject } from "../shared/guards";
+import { collabEvents } from "../events";
 import { assertProjectAccess, assertProjectMemberRoleCompatibility } from "../shared/project-access";
 import { enrichProjectMembersWithProfiles } from "../shared/mappers";
 import type { GlobalRole } from "../collab.types";
@@ -47,7 +48,9 @@ export const createMemberService = (
       if (!profile) throw new NotFoundError("Usuario no encontrado o aún no disponible");
       assertProjectMemberRoleCompatibility(profile.role, role);
       return db.transaction(async (tx) => {
-        const row = await createMemberRepository(tx).upsertProjectMember({
+        const txMemberRepo = createMemberRepository(tx);
+        const existingMember = await txMemberRepo.findProjectMember(projectId, userSub);
+        const row = await txMemberRepo.upsertProjectMember({
           projectId,
           userSub,
           role,
@@ -62,6 +65,14 @@ export const createMemberService = (
           userAgent: meta.userAgent,
           details: { userSub, role },
         });
+        if (!existingMember) {
+          await collabEvents.emit("project.member.added", projectId, actor.sub, {
+            projectId,
+            memberSub: userSub,
+            role,
+            addedBySub: actor.sub,
+          }, tx);
+        }
         return row;
       });
     },

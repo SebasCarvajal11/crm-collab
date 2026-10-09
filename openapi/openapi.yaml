@@ -1039,6 +1039,52 @@ paths:
         '403':
           description: Solo admin puede editar columnas
 
+  /api/v1/collab/projects/{projectId}/tasks/search:
+    get:
+      summary: Buscar tareas del proyecto por término
+      tags:
+        - Tasks
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 120
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 8
+      responses:
+        '200':
+          description: Lista de tareas encontradas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+        '400':
+          description: Parámetros inválidos
+        '403':
+          description: Sin permisos
+        '404':
+          description: Proyecto no encontrado
+
   /api/v1/collab/projects/{projectId}/tasks:
     get:
       summary: Listar tareas del proyecto
@@ -2214,22 +2260,6 @@ paths:
         '200':
           description: Historial de acciones
 
-  /api/v1/collab/projects/{projectId}/files/timeline:
-    get:
-      summary: Obtener el historial de archivos del proyecto
-      tags:
-        - Files
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Historial de archivos
-
   /api/v1/collab/projects/{projectId}/files/upload-url:
     post:
       summary: Obtener URL de subida de archivo para el proyecto
@@ -2245,22 +2275,6 @@ paths:
       responses:
         '200':
           description: URL generada
-
-  /api/v1/collab/projects/{projectId}/files/upload:
-    post:
-      summary: Subir un archivo al proyecto
-      tags:
-        - Files
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Archivo subido
 
   /api/v1/collab/projects/{projectId}/files/uploaded-object:
     delete:

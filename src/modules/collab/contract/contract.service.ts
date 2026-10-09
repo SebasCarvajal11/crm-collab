@@ -35,13 +35,22 @@ export const createContractService = (
 
   return {
     getContract: async (actor: Actor, projectId: string) => {
-      await assertProjectAccess(accessRepo, actor, projectId)
-      return contractRepository.getByProjectId(projectId)
+      const { project } = await assertProjectAccess(accessRepo, actor, projectId)
+      const contract = await contractRepository.getByProjectId(projectId)
+      if (contract && !contract.contentSnapshot) {
+        const snapshot = buildContractSnapshot(contract, project.name)
+        return {
+          ...contract,
+          contentSnapshot: snapshot,
+          contentHash: contract.contentHash ?? hashContractSnapshot(snapshot),
+        }
+      }
+      return contract
     },
 
     saveDraft: async (actor: Actor, projectId: string, payload: UpsertProjectContractBody, meta: RequestMeta) => {
       requireAdmin(actor)
-      await assertProjectAccess(accessRepo, actor, projectId)
+      const { project } = await assertProjectAccess(accessRepo, actor, projectId)
       const current = await contractRepository.getByProjectId(projectId)
       if (current?.status === 'signed') {
         throw new BadRequestError('Un contrato firmado es inmutable; formaliza una adenda u Otrosí')
@@ -50,33 +59,41 @@ export const createContractService = (
         throw new BadRequestError('No puedes editar un contrato enviado a firma; prepara un nuevo borrador')
       }
 
+      const draftData = {
+        projectId,
+        status: 'draft' as const,
+        providerKind: payload.provider_kind,
+        providerName: payload.provider_name,
+        providerTaxId: payload.provider_tax_id?.trim() || null,
+        providerRepresentative: payload.provider_representative?.trim() || null,
+        providerRepresentativeDocument: payload.provider_representative_document?.trim() || null,
+        clientKind: payload.client_kind,
+        clientName: payload.client_name,
+        clientDocument: payload.client_document?.trim() || null,
+        clientCompanyName: payload.client_company_name?.trim() || null,
+        clientTaxId: payload.client_tax_id?.trim() || null,
+        clientRepresentative: payload.client_representative?.trim() || null,
+        clientRepresentativeDocument: payload.client_representative_document?.trim() || null,
+        clientEmail: payload.client_email,
+        clientPhone: payload.client_phone?.trim() || null,
+        planName: payload.plan_name,
+        monthlyFee: payload.monthly_fee,
+        currency: payload.currency,
+        taxIncluded: payload.tax_included,
+        termMonths: payload.term_months,
+        serviceScope: payload.service_scope,
+        additionalTerms: payload.additional_terms?.trim() || null,
+        signatureCity: payload.signature_city,
+      }
+
+      const snapshot = buildContractSnapshot(draftData as any, project.name)
+      const contentHash = hashContractSnapshot(snapshot)
+
       return db.transaction(async (tx) => {
         const contract = await createContractRepository(tx).upsertDraft({
-          projectId,
-          status: 'draft',
-          providerKind: payload.provider_kind,
-          providerName: payload.provider_name,
-          providerTaxId: payload.provider_tax_id?.trim() || null,
-          providerRepresentative: payload.provider_representative?.trim() || null,
-          providerRepresentativeDocument: payload.provider_representative_document?.trim() || null,
-          clientKind: payload.client_kind,
-          clientName: payload.client_name,
-          clientDocument: payload.client_document?.trim() || null,
-          clientCompanyName: payload.client_company_name?.trim() || null,
-          clientTaxId: payload.client_tax_id?.trim() || null,
-          clientRepresentative: payload.client_representative?.trim() || null,
-          clientRepresentativeDocument: payload.client_representative_document?.trim() || null,
-          clientEmail: payload.client_email,
-          clientPhone: payload.client_phone?.trim() || null,
-          planName: payload.plan_name,
-          monthlyFee: payload.monthly_fee,
-          currency: payload.currency,
-          taxIncluded: payload.tax_included,
-          termMonths: payload.term_months,
-          serviceScope: payload.service_scope,
-          additionalTerms: payload.additional_terms?.trim() || null,
-          contentSnapshot: null,
-          contentHash: null,
+          ...draftData,
+          contentSnapshot: snapshot,
+          contentHash,
           preparedBySub: actor.sub,
           requestedSignatureAt: null,
           signedAt: null,
@@ -86,7 +103,6 @@ export const createContractService = (
           consentAcceptedAt: null,
           signedIpAddress: null,
           signedUserAgent: null,
-          signatureCity: payload.signature_city,
         })
         await createAuditRepository(tx).createAuditLog({
           actorSub: actor.sub,
@@ -95,7 +111,7 @@ export const createContractService = (
           resourceId: contract.id,
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
-          details: { projectId },
+          details: { projectId, contentHash },
         })
         return contract
       })
@@ -126,15 +142,18 @@ export const createContractService = (
     },
 
     sign: async (actor: Actor, projectId: string, payload: SignProjectContractBody, meta: RequestMeta) => {
-      const { member } = await assertProjectAccess(accessRepo, actor, projectId)
+      const { member, project } = await assertProjectAccess(accessRepo, actor, projectId)
       if (actor.role !== 'client' || member?.role !== 'client') {
         throw new ForbiddenError('Solo el cliente asignado al proyecto puede firmar el contrato')
       }
       const current = await contractRepository.getByProjectId(projectId)
       if (!current) throw new NotFoundError('Contrato no encontrado')
-      if (current.status !== 'pending_signature' || !current.contentSnapshot || !current.contentHash) {
+      if (current.status !== 'pending_signature') {
         throw new BadRequestError('El contrato no está disponible para firma')
       }
+      const snapshot = current.contentSnapshot ?? buildContractSnapshot(current, project.name)
+      const contentHash = current.contentHash ?? hashContractSnapshot(snapshot)
+
       return db.transaction(async (tx) => {
         const contract = await createContractRepository(tx).sign(projectId, {
           signedBySub: actor.sub,
@@ -142,6 +161,7 @@ export const createContractService = (
           signatureDataUrl: payload.signature_data_url,
           signedIpAddress: meta.ipAddress,
           signedUserAgent: meta.userAgent,
+          ...(!current.contentSnapshot ? { contentSnapshot: snapshot, contentHash } : {}),
         })
         if (!contract) throw new NotFoundError('Contrato no encontrado')
         await createAuditRepository(tx).createAuditLog({
@@ -151,7 +171,11 @@ export const createContractService = (
           resourceId: contract.id,
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
-          details: { projectId, contentHash: current.contentHash, consent: contract.consentAcceptedAt?.toISOString() },
+          details: {
+            projectId,
+            contentHash,
+            consent: contract.consentAcceptedAt?.toISOString(),
+          },
         })
         return contract
       })

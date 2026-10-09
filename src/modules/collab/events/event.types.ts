@@ -131,8 +131,53 @@ export interface TaskUnblockedEvent {
   clientVisible?: boolean;
 }
 
+export interface TaskCreatedEvent {
+  taskId: string;
+  taskTitle: string;
+  columnId: string;
+  columnKey: string;
+  priority: string;
+  assigneeSubs?: string[];
+  clientVisible?: boolean;
+}
+
+export interface TaskUpdatedEvent {
+  taskId: string;
+  taskTitle: string;
+  columnId: string;
+  columnKey: string;
+  changes: Record<string, unknown>;
+  assigneeSubs?: string[];
+  clientVisible?: boolean;
+}
+
+export interface ProjectMemberAddedEvent {
+  projectId: string;
+  memberSub: string;
+  role: "admin" | "worker" | "client";
+  addedBySub: string;
+}
+
+export interface ProjectCompletedEvent {
+  projectId: string;
+  projectName: string;
+  completedAt: string;
+  completedBySub: string;
+}
+
+export interface BriefUpdatedEvent {
+  projectId: string;
+  briefId?: string;
+  updatedBySub: string;
+  title?: string;
+}
+
 export type CollabEventPayload =
   | ProjectCreatedEvent
+  | ProjectCompletedEvent
+  | ProjectMemberAddedEvent
+  | TaskCreatedEvent
+  | TaskUpdatedEvent
   | TaskMovedEvent
   | TaskAssignedEvent
   | TaskBlockedEvent
@@ -143,4 +188,5 @@ export type CollabEventPayload =
   | FormalChangeRequestCreatedEvent
   | FormalChangeRequestApprovedEvent
   | FileApprovedEvent
+  | BriefUpdatedEvent
   | Record<string, unknown>;

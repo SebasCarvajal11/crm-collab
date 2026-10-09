@@ -197,4 +197,53 @@ describe("BoardTaskBlockingService", () => {
       expect.anything(),
     );
   });
+
+  it("desbloquea hacia client_approval activando visibilidad y omitiendo comentario en blanco", async () => {
+    const adminActor = { sub: "a-1", userId: "a-1", role: "admin" as const, email: "a@c.dev" };
+    mockFindTaskById.mockResolvedValue({
+      id: "t-2",
+      projectId: "p-1",
+      columnId: "col-blocked",
+      title: "Entrega Final",
+      blockType: "internal_impediment",
+      isClientVisible: false,
+    });
+    mockFindTaskColumnById.mockResolvedValue({ id: "col-approval", key: "client_approval", projectId: "p-1" });
+    mockListTaskAssignees.mockResolvedValue([{ userSub: "w-1" }]);
+    mockUpdateTaskById.mockResolvedValue({
+      id: "t-2",
+      columnId: "col-approval",
+      isClientVisible: true,
+      title: "Entrega Final",
+    });
+
+    const service = createBoardTaskBlockingService(boardRepo, projectRepo, memberRepo);
+    await service.unblockTask(
+      adminActor,
+      "t-2",
+      { targetColumnId: "col-approval", resolutionComment: "   " },
+      meta,
+    );
+
+    expect(mockCreateTaskComment).not.toHaveBeenCalled();
+    expect(mockUpdateTaskById).toHaveBeenCalledWith(
+      "t-2",
+      expect.objectContaining({
+        columnId: "col-approval",
+        isClientVisible: true,
+        clientApprovalRequestedAt: expect.any(Date),
+      }),
+    );
+    expect(mockEmit).toHaveBeenCalledWith(
+      "task.unblocked",
+      "p-1",
+      "a-1",
+      expect.objectContaining({
+        taskId: "t-2",
+        targetColumnKey: "client_approval",
+        clientVisible: true,
+      }),
+      expect.anything(),
+    );
+  });
 });

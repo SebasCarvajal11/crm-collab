@@ -8,6 +8,7 @@ import type {
   CreateTaskBody,
   UpdateTaskBody,
   ProjectTasksQuery,
+  TaskSearchQuery,
   CreateTaskCommentBody,
   CreateTaskFileMetadataBody,
   BlockTaskBody,
@@ -19,12 +20,13 @@ import { getIp, getUa } from "../../../shared/request-context";
 const requiredParam = (c: Context, key: string) => c.req.param(key) ?? "";
 const mapColumn = (col: any) => {
   if (!col) return col;
-  const isVisible = col.isClientVisible ?? col.is_client_visible;
+  const isVisible = Boolean(col.isClientVisible ?? col.is_client_visible);
+  const rest = { ...col };
+  delete rest.client_visible;
   return {
-    ...col,
+    ...rest,
     isClientVisible: isVisible,
     is_client_visible: isVisible,
-    client_visible: isVisible,
   };
 };
 const mapSubtasks = (
@@ -109,6 +111,16 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
     return c.json({ data: result }, 200);
   },
 
+  searchTasks: async (c: Context<AppEnv>) => {
+    const q = validatedQuery<TaskSearchQuery>(c);
+    const rows = await service.searchTasks(
+      actorFromContext(c),
+      requiredParam(c, "projectId"),
+      { q: q.q, limit: q.limit }
+    );
+    return c.json({ data: rows }, 200);
+  },
+
   updateTask: async (c: Context<AppEnv>) => {
     const body = validatedJson<UpdateTaskBody>(c);
     const row = await service.updateTask(
@@ -126,6 +138,9 @@ export const createBoardController = (service: ReturnType<typeof createBoardServ
         clientVisible: body.client_visible,
         position: body.position,
         subtasks: mapSubtasks(body.subtasks),
+        blockReason: body.block_reason,
+        blockType: body.block_type,
+        resolutionComment: body.resolution_comment,
       },
       { ipAddress: getIp(c), userAgent: getUa(c) }
     );

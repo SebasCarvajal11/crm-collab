@@ -11,14 +11,22 @@ export const TaskColumnKeyEnum = z.enum([
   "client_approval",
   "blocked",
   "done",
+  /** @deprecated Columna obsoleta de producto migrada a 'doing' en 0013 */
   "art_approved",
+  /** @deprecated Columna obsoleta de producto migrada a 'doing' en 0013 */
   "in_production",
+  /** @deprecated Columna obsoleta de producto migrada a 'internal_review' en 0013 */
   "quality_control",
+  /** @deprecated Columna obsoleta de producto migrada a 'client_approval' en 0013 */
   "shipped",
+  /** @deprecated Columna obsoleta de producto migrada a 'done' en 0013 */
   "completed",
+  /** @deprecated Columna obsoleta de producto migrada a 'blocked' en 0013 */
   "waiting_material",
+  /** @deprecated Columna obsoleta de producto */
   "on_hold",
 ]);
+/** Canal de chat disponible para mensajes. Nota: el valor 'system' en DB está @deprecated y no se expone para nuevo contenido. */
 export const ChatChannelEnum = z.enum(["internal", "external"]);
 export const FileFolderEnum = z.enum([
   "mockups",
@@ -64,6 +72,11 @@ export const FormalChangeLogQuerySchema = PaginationQuerySchema.extend({});
 export const ProjectSearchQuerySchema = z.object({
   q: z.string().trim().min(1).max(120),
   limit: z.coerce.number().int().min(1).max(20).default(8),
+});
+
+export const TaskSearchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(50).default(8),
 });
 
 const FileRepositoryUrlSchema = z
@@ -164,8 +177,17 @@ export const UpdateTaskSchema = z.object({
   client_visible: z.boolean().optional(),
   position: z.number().int().min(0).optional(),
   subtasks: z.array(SubtaskSchema).max(50).optional(),
-  block_reason: z.string().max(1000).nullable().optional(),
+  block_reason: z
+    .string()
+    .trim()
+    .max(1000)
+    .refine((val) => val.length === 0 || val.length >= 5, {
+      message: "El motivo de bloqueo debe tener al menos 5 caracteres",
+    })
+    .nullable()
+    .optional(),
   block_type: z.enum(["client_timeout", "internal_impediment"]).nullable().optional(),
+  resolution_comment: z.string().trim().max(1000).optional(),
 });
 
 export const BlockTaskSchema = z.object({
@@ -382,6 +404,7 @@ export type ProjectFilesQuery = z.infer<typeof ProjectFilesQuerySchema>;
 export type FormalChangeLogQuery = z.infer<typeof FormalChangeLogQuerySchema>;
 export type ListChangeRequestsQuery = z.infer<typeof ListChangeRequestsQuerySchema>;
 export type ProjectSearchQuery = z.infer<typeof ProjectSearchQuerySchema>;
+export type TaskSearchQuery = z.infer<typeof TaskSearchQuerySchema>;
 export type CreateProjectBody = z.infer<typeof CreateProjectSchema>;
 export type UpdateProjectBody = z.infer<typeof UpdateProjectSchema>;
 export type UpsertProjectMemberBody = z.infer<typeof UpsertProjectMemberSchema>;

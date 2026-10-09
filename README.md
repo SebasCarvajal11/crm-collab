@@ -47,7 +47,7 @@ pnpm dev                      # servidor con hot-reload en http://localhost:3001
 
 ### 3. Workers de Background (Proceso Independiente)
 ```bash
-pnpm worker:collab-outbox     # despachador de eventos outbox y purga de cachés
+pnpm worker:collab            # despachador de eventos outbox y tareas de mantenimiento
 ```
 
 ### 4. Herramientas de Operación y DLQ

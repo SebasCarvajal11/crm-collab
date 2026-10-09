@@ -76,7 +76,7 @@ export const createBoardTaskBlockingService = (
           blockReason: payload.reason,
           blockType: "internal_impediment",
           assigneeSubs,
-          clientVisible: task.isClientVisible,
+          clientVisible: updated.isClientVisible,
         }, tx);
 
         await collabEvents.emit("task.moved", task.projectId, actor.sub, {
@@ -86,7 +86,7 @@ export const createBoardTaskBlockingService = (
           toColumnKey: "blocked",
           assigneeSub: task.assigneeSub ?? undefined,
           assigneeSubs,
-          clientVisible: task.isClientVisible,
+          clientVisible: updated.isClientVisible,
         }, tx);
 
         return (await txBoardRepository.findTaskById(taskId)) ?? updated;
@@ -130,12 +130,13 @@ export const createBoardTaskBlockingService = (
         const txBoardRepository = createBoardRepository(tx);
         const txProjectRepository = (await import("../project/project.repository")).createProjectRepository(tx);
 
-        if (options.resolutionComment) {
+        const trimmedComment = options.resolutionComment?.trim();
+        if (trimmedComment) {
           await txBoardRepository.createTaskComment({
             taskId,
             authorSub: actor.sub,
             authorEmail: actor.email,
-            content: `[Resolución de Bloqueo] ${options.resolutionComment}`,
+            content: `[Resolución de Bloqueo] ${trimmedComment}`,
           });
         }
 
@@ -146,7 +147,7 @@ export const createBoardTaskBlockingService = (
           blockType: null,
           blockedAt: null,
           blockedBySub: null,
-          ...(isClientApproval ? { clientApprovalRequestedAt: new Date() } : {}),
+          ...(isClientApproval ? { clientApprovalRequestedAt: new Date(), isClientVisible: true } : {}),
         });
         if (!updated) throw new NotFoundError("Tarea no encontrada al desbloquear");
 
@@ -168,7 +169,7 @@ export const createBoardTaskBlockingService = (
           taskTitle: task.title,
           targetColumnKey: targetColumn!.key,
           assigneeSubs,
-          clientVisible: task.isClientVisible,
+          clientVisible: updated.isClientVisible,
         }, tx);
 
         await collabEvents.emit("task.moved", task.projectId, actor.sub, {
@@ -178,7 +179,7 @@ export const createBoardTaskBlockingService = (
           toColumnKey: targetColumn!.key,
           assigneeSub: task.assigneeSub ?? undefined,
           assigneeSubs,
-          clientVisible: task.isClientVisible,
+          clientVisible: updated.isClientVisible,
         }, tx);
 
         return (await txBoardRepository.findTaskById(taskId)) ?? updated;

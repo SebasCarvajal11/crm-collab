@@ -62,7 +62,7 @@ Este documento define la topología de comunicación, los canales de mensajería
 ### C. Publicación de Eventos de Dominio (`stream:collab.events`)
 - **Propósito**: Notificar a la plataforma sobre eventos clave (creación de proyectos, cambios de estado de tareas, envío de mensajes).
 - **Garantía At-Least-Once**: Se implementa mediante el patrón **Transactional Outbox**. El servidor HTTP inserta el evento en la tabla `schema_collab.collab_outbox` en la misma transacción SQL del dominio.
-- **Worker Dedicado**: El proceso independiente `worker:collab-outbox` lee lotes pendientes con bloqueo transaccional (`FOR UPDATE SKIP LOCKED`), publica en Redis Streams y marca el registro como completado.
+- **Worker Dedicado**: El proceso independiente `worker:collab` lee lotes pendientes con bloqueo transaccional (`FOR UPDATE SKIP LOCKED`), publica en Redis Streams y marca el registro como completado.
 
 ---
 

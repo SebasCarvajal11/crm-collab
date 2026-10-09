@@ -5,6 +5,11 @@ import { canMoveTasks, canBlockTask, canUnblockTask } from "../shared/guards";
 import { assertProjectAccess, assertWorkerOnlyAssignments } from "../shared/project-access";
 import { resolveAssigneeEmails } from "../shared/mappers";
 import { resolveTaskProgressAndCompletion } from "./board-task-progress";
+import {
+  resolveTaskColumnStatePatches,
+  logTaskUpdateAuditAndComments,
+} from "./board-task-patches";
+import { emitTaskUpdateEvents } from "./board-task-events";
 import { createAuditRepository } from "../repository/audit.repository";
 import { createBoardRepository } from "./board.repository";
 import { createProjectRepository } from "../project/project.repository";
@@ -86,6 +91,15 @@ export const createBoardTaskService = (
           ipAddress: meta.ipAddress,
           userAgent: meta.userAgent,
         });
+        await collabEvents.emit("task.created", projectId, actor.sub, {
+          taskId: task.id,
+          taskTitle: task.title,
+          columnId: column.id,
+          columnKey: column.key,
+          priority: task.priority,
+          assigneeSubs: payload.assignees?.map((a) => a.userSub) ?? [],
+          clientVisible: task.isClientVisible,
+        }, tx);
         for (const assignee of payload.assignees ?? []) {
           if (assignee.userSub !== actor.sub) {
             await collabEvents.emit("task.assigned", projectId, actor.sub, {
@@ -114,6 +128,20 @@ export const createBoardTaskService = (
       });
       const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
       return { items: rows, page: query.page, limit: query.limit, total, total_pages: totalPages };
+    },
+
+    searchTasks: async (
+      actor: Actor,
+      projectId: string,
+      query: { q: string; limit: number },
+    ) => {
+      await assertProjectAccess(accessRepo, actor, projectId);
+      return boardRepository.searchTasksByProject({
+        projectId,
+        q: query.q,
+        limit: query.limit,
+        isClientVisible: actor.role === "client" ? true : undefined,
+      });
     },
 
     updateTask: async (
@@ -170,7 +198,10 @@ export const createBoardTaskService = (
         }
       }
 
-      if (isMovingToBlocked && !canBlockTask(actor.role, member?.role)) {
+      const isBlockingAttempt =
+        isMovingToBlocked ||
+        (targetColumn.key === "blocked" && (patch.blockReason !== undefined || patch.blockType !== undefined));
+      if (isBlockingAttempt && !canBlockTask(actor.role, member?.role)) {
         throw new ForbiddenError("No tienes permisos para bloquear esta tarea");
       }
 
@@ -183,22 +214,15 @@ export const createBoardTaskService = (
         const txProjectRepository = createProjectRepository(tx);
         const txMemberRepository = createMemberRepository(tx);
 
-        const unblockingPatch = isMovingFromBlocked
-          ? { blockReason: null, blockType: null, blockedAt: null, blockedBySub: null }
-          : {};
-
-        const blockingPatch = isMovingToBlocked
-          ? {
-              blockReason: patch.blockReason?.trim() || "Impedimento interno",
-              blockType: patch.blockType ?? "internal_impediment" as const,
-              blockedAt: new Date(),
-              blockedBySub: actor.sub,
-            }
-          : {};
-
-        const clientApprovalPatch = isMovingToClientApproval
-          ? { clientApprovalRequestedAt: new Date(), isClientVisible: true }
-          : {};
+        const { unblockingPatch, blockingPatch, clientApprovalPatch } = resolveTaskColumnStatePatches({
+          isMovingFromBlocked,
+          isMovingToBlocked,
+          isMovingToClientApproval,
+          targetColumnKey: targetColumn.key,
+          blockReason: patch.blockReason,
+          blockType: patch.blockType,
+          actorSub: actor.sub,
+        });
 
         const updated = await txBoardRepository.updateTaskById(taskId, {
           columnId: patch.columnId,
@@ -237,59 +261,31 @@ export const createBoardTaskService = (
           await syncProjectSummary(txProjectRepository, task.projectId);
         }
 
-        await createAuditRepository(tx).createAuditLog({
-          actorSub: actor.sub,
-          action: "project_task_updated",
-          resourceType: "project_task",
-          resourceId: taskId,
-          ipAddress: meta.ipAddress,
-          userAgent: meta.userAgent,
+        await logTaskUpdateAuditAndComments({
+          auditRepo: createAuditRepository(tx),
+          txBoardRepository,
+          actor,
+          taskId,
+          meta,
+          isMovingToBlocked,
+          isMovingFromBlocked,
+          resolutionComment: patch.resolutionComment,
         });
 
-        if (patch.columnId && patch.columnId !== task.columnId) {
-          const assigneeSubs = (await txBoardRepository.listTaskAssignees(taskId)).map((a) => a.userSub);
-          await collabEvents.emit("task.moved", task.projectId, actor.sub, {
-            taskId: task.id,
-            taskTitle: updated.title,
-            fromColumnKey: currentColumn.key,
-            toColumnKey: targetColumn.key,
-            assigneeSub: updated.assigneeSub ?? undefined,
-            assigneeSubs,
-            clientVisible: updated.isClientVisible,
-          }, tx);
-
-          if (isMovingFromBlocked) {
-            await collabEvents.emit("task.unblocked", task.projectId, actor.sub, {
-              taskId: task.id,
-              taskTitle: updated.title,
-              targetColumnKey: targetColumn.key,
-              assigneeSubs,
-              clientVisible: updated.isClientVisible,
-            }, tx);
-          }
-
-          if (isMovingToBlocked) {
-            await collabEvents.emit("task.blocked", task.projectId, actor.sub, {
-              taskId: task.id,
-              taskTitle: updated.title,
-              blockReason: patch.blockReason ?? "Impedimento interno",
-              blockType: "internal_impediment",
-              assigneeSubs,
-              clientVisible: updated.isClientVisible,
-            }, tx);
-          }
-        }
-
-        if (patch.assignees !== undefined) {
-          for (const assignee of patch.assignees.filter((candidate) => !previousAssigneeSubs.includes(candidate.userSub))) {
-            if (assignee.userSub === actor.sub) continue;
-            await collabEvents.emit("task.assigned", task.projectId, actor.sub, {
-              taskId: task.id,
-              taskTitle: updated.title,
-              assigneeSub: assignee.userSub,
-            }, tx);
-          }
-        }
+        const assigneeSubs = (await txBoardRepository.listTaskAssignees(taskId)).map((a) => a.userSub);
+        await emitTaskUpdateEvents({
+          tx,
+          task,
+          updated,
+          currentColumn,
+          targetColumn,
+          actor,
+          patch,
+          isMovingFromBlocked,
+          isMovingToBlocked,
+          assigneeSubs,
+          previousAssigneeSubs,
+        });
 
         return (await txBoardRepository.findTaskById(taskId)) ?? updated;
       });

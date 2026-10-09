@@ -101,11 +101,11 @@ PATCH {{base_url}}/api/v1/collab/projects/{{project_id}}/change-requests/{{minor
 Authorization: Bearer {{worker_token}}
 Content-Type: application/json
 {
-  "status": "resolved"
+  "status": "accepted"
 }
 HTTP 200
 [Asserts]
-jsonpath "$.data.status" == "resolved"
+jsonpath "$.data.status" == "accepted"
 
 # Una solicitud formal requiere la resolución de un administrador global.
 POST {{base_url}}/api/v1/collab/projects/{{project_id}}/change-requests/formal

@@ -56,16 +56,28 @@ export const taskColumnKeyEnum = collabSchema.enum("task_column_key", [
   "client_approval",
   "blocked",
   "done",
+  /** @deprecated Columna obsoleta de producto migrada a 'doing' en 0013 */
   "art_approved",
+  /** @deprecated Columna obsoleta de producto migrada a 'doing' en 0013 */
   "in_production",
+  /** @deprecated Columna obsoleta de producto migrada a 'internal_review' en 0013 */
   "quality_control",
+  /** @deprecated Columna obsoleta de producto migrada a 'client_approval' en 0013 */
   "shipped",
+  /** @deprecated Columna obsoleta de producto migrada a 'done' en 0013 */
   "completed",
+  /** @deprecated Columna obsoleta de producto migrada a 'blocked' en 0013 */
   "waiting_material",
+  /** @deprecated Columna obsoleta de producto */
   "on_hold",
 ]);
 
-export const chatChannelEnum = collabSchema.enum("chat_channel", ["internal", "external", "system"]);
+export const chatChannelEnum = collabSchema.enum("chat_channel", [
+  "internal",
+  "external",
+  /** @deprecated Canal legado conservado para compatibilidad con registros historicos */
+  "system",
+]);
 
 export const chatMessageTypeEnum = collabSchema.enum("chat_message_type", [
   "text",
@@ -119,7 +131,14 @@ export const projects = collabSchema.table(
     progressPercent: integer("progress_percent").default(0).notNull(),
     adminResponsibleSub: uuid("admin_responsible_sub").notNull(),
     estimatedDueDate: timestamp("estimated_due_date", { mode: "date" }),
+    /** @deprecated Columna obsoleta conservada por retrocompatibilidad de esquema. Usar tabla de notificaciones de actividad. */
     unreadNotifications: integer("unread_notifications").default(0).notNull(),
+    /**
+     * ID del último archivo aprobado en `project_files`.
+     * Nota: Clave foránea gestionada lógicamente a nivel de servicio para prevenir dependencias
+     * circulares en DDL (projects <-> project_files). La integridad referencial se preserva
+     * reseteando a NULL en `file-management.service.ts:deleteFile` al eliminar el archivo.
+     */
     latestApprovedFileId: uuid("latest_approved_file_id"),
     /** Enlace a Drive, OneDrive u otro repositorio externo de archivos pesados. */
     fileRepositoryUrl: text("file_repository_url"),
